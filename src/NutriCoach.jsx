@@ -53,6 +53,22 @@ const todayKey=(d=new Date())=>d.toISOString().slice(0,10);
 const fmtDate=k=>{const d=new Date(k+"T12:00:00");return `${DOW[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;};
 const fmtShort=k=>{const d=new Date(k+"T12:00:00");return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;};
 
+// ---- Open Food Facts: ricerca prodotti commerciali (gira nel browser dell'utente) ----
+async function searchOFF(query){
+  const url=`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=12&fields=product_name,brands,nutriments,serving_size,serving_quantity,image_small_url`;
+  const res=await fetch(url,{headers:{"User-Agent":"NutriCoach - personal"}});
+  const data=await res.json();
+  return (data.products||[]).map(p=>{
+    const n=p.nutriments||{};
+    const kcal100=n["energy-kcal_100g"]??(n["energy_100g"]?n["energy_100g"]/4.184:null);
+    if(kcal100==null)return null;
+    return {name:[p.product_name,p.brands].filter(Boolean).join(" · ").slice(0,60)||"Prodotto senza nome",
+      img:p.image_small_url||null,kcal100:Math.round(kcal100),
+      p100:+(n["proteins_100g"]??0).toFixed(1),c100:+(n["carbohydrates_100g"]??0).toFixed(1),f100:+(n["fat_100g"]??0).toFixed(1),
+      serving:p.serving_quantity?Math.round(p.serving_quantity):null,servingTxt:p.serving_size||null};
+  }).filter(Boolean);
+}
+
 /* ============ MOTORE PIANO ============ */
 function computePlan(p){
   // Mifflin-St Jeor
@@ -118,6 +134,11 @@ export default function App(){
   const [inputs,setInputs]=useState({});
   const [openSlot,setOpenSlot]=useState("colazione");
   const [warnings,setWarnings]=useState({});
+  const [searchSlot,setSearchSlot]=useState(null);
+  const [searchQ,setSearchQ]=useState("");
+  const [searchRes,setSearchRes]=useState([]);
+  const [searching,setSearching]=useState(false);
+  const [searchErr,setSearchErr]=useState(null);
   const [woType,setWoType]=useState("padel");const [woKcal,setWoKcal]=useState("");const [woDur,setWoDur]=useState("");const [woNote,setWoNote]=useState("");
   const [wizard,setWizard]=useState(null); // stato wizard creazione piano
   const [weights,setWeights]=useState({}); // {dateKey: kg}
@@ -182,6 +203,8 @@ export default function App(){
 
   const addEntry=slotId=>{const text=(inputs[slotId]||"").trim();if(!text)return;const{results,unknown}=parseEntry(text);if(results.length)updateDay({logs:{...logs,[slotId]:[...(logs[slotId]||[]),...results]}});setWarnings(p=>({...p,[slotId]:unknown}));setInputs(p=>({...p,[slotId]:""}));};
   const removeItem=(slotId,idx)=>updateDay({logs:{...logs,[slotId]:logs[slotId].filter((_,i)=>i!==idx)}});
+  const addProduct=(slotId,prod,grams)=>{const fct=grams/100;const item={label:prod.name,grams:Math.round(grams),kcal:Math.round(prod.kcal100*fct),p:+(prod.p100*fct).toFixed(1),c:+(prod.c100*fct).toFixed(1),f:+(prod.f100*fct).toFixed(1)};updateDay({logs:{...logs,[slotId]:[...(logs[slotId]||[]),item]}});};
+  const runSearch=async()=>{const q=searchQ.trim();if(!q)return;setSearching(true);setSearchErr(null);setSearchRes([]);try{const r=await searchOFF(q);if(!r.length)setSearchErr("Nessun prodotto trovato. Prova con marca + nome (es: 'muller caffè').");setSearchRes(r);}catch(e){setSearchErr("Ricerca non disponibile (connessione o troppe richieste). Riprova tra poco.");}setSearching(false);};
   const clearDay=()=>updateDay({logs:{},workouts:[]});
   const addWorkout=()=>{const kcal=parseInt(woKcal);if(!kcal||kcal<=0)return;const t=WORKOUT_TYPES.find(w=>w.id===woType);updateDay({workouts:[...workouts,{id:Date.now(),type:woType,label:t.label,icon:t.icon,kcal,dur:woDur?parseInt(woDur):null,note:woNote.trim()||null}]});setWoKcal("");setWoDur("");setWoNote("");};
   const removeWorkout=id=>updateDay({workouts:workouts.filter(w=>w.id!==id)});
@@ -282,6 +305,7 @@ export default function App(){
                   <input value={inputs[slot.id]||""} onChange={e=>setInputs(p=>({...p,[slot.id]:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter")addEntry(slot.id);}} placeholder="es: 150g pollo, 80g riso, 2 uova" style={{flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,outline:"none"}}/>
                   <button onClick={()=>addEntry(slot.id)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+</button>
                 </div>
+                <button onClick={()=>{setSearchSlot(slot.id);setSearchQ("");setSearchRes([]);setSearchErr(null);}} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed #475569",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:12,marginBottom:items.length?12:0}}>🔍 Cerca un prodotto confezionato (es. "muller caffè")</button>
                 {warnings[slot.id]?.length>0&&<div style={{background:"#422006",borderRadius:8,padding:"8px 12px",margin:"10px 0",fontSize:11,color:"#FBBF24"}}>⚠️ Non riconosciuto: {warnings[slot.id].join(", ")}. Usa grammi espliciti.</div>}
                 {items.map((it,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #0F172A"}}><div style={{flex:1}}><div style={{fontSize:13,color:"#E2E8F0",fontWeight:600}}>{it.label} <span style={{color:"#64748B",fontWeight:400}}>· {it.grams}g</span></div><div style={{fontSize:11,color:"#64748B"}}>P:{it.p} C:{it.c} F:{it.f}</div></div><span style={{fontSize:13,color:"#60A5FA",fontWeight:700}}>{it.kcal}</span><button onClick={()=>removeItem(slot.id,i)} style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:16,padding:4}}>×</button></div>))}
               </div>)}
@@ -341,6 +365,30 @@ export default function App(){
             </div>);})}
         </>)}
       </div>
+
+      {/* ===== MODALE RICERCA PRODOTTO ===== */}
+      {searchSlot&&(
+        <div onClick={()=>setSearchSlot(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#1E293B",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,maxHeight:"85vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
+            <div style={{padding:"16px 16px 12px",borderBottom:"1px solid #334155"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"#F1F5F9"}}>🔍 Cerca prodotto · {MEAL_SLOTS.find(m=>m.id===searchSlot)?.label}</h3>
+                <button onClick={()=>setSearchSlot(null)} style={{background:"none",border:"none",color:"#64748B",fontSize:22,cursor:"pointer"}}>×</button>
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <input autoFocus value={searchQ} onChange={e=>setSearchQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")runSearch();}} placeholder="es: muller caffè, fage yogurt, kinder" style={{flex:1,padding:"11px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:14,outline:"none"}}/>
+                <button onClick={runSearch} disabled={searching} style={{padding:"11px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>{searching?"…":"Cerca"}</button>
+              </div>
+            </div>
+            <div style={{overflowY:"auto",padding:"12px 16px 24px"}}>
+              {searching&&<div style={{textAlign:"center",color:"#64748B",padding:20,fontSize:13}}>Ricerca nel database Open Food Facts…</div>}
+              {searchErr&&<div style={{background:"#422006",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#FBBF24"}}>{searchErr}</div>}
+              {searchRes.map((prod,i)=>(<ProductRow key={i} prod={prod} onAdd={(g)=>{addProduct(searchSlot,prod,g);setSearchSlot(null);}}/>))}
+              {!searching&&!searchErr&&searchRes.length===0&&<div style={{textAlign:"center",color:"#475569",padding:30,fontSize:13}}>Scrivi marca + nome del prodotto e premi Cerca.<br/>Es: "muller caffè", "kinder", "barilla pesto"</div>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -883,6 +931,31 @@ function PlanView({plans,onNew,onEdit}){
             {p.learnedAdjustment?<div style={{fontSize:10,color:"#6EE7B7",marginTop:8}}>🧠 Include aggiustamento dai dati: {p.learnedAdjustment>0?"+":""}{p.learnedAdjustment} kcal</div>:null}
           </div>);})}
       </>)}
+    </div>
+  );
+}
+
+/* ============ PRODUCT ROW (risultato ricerca) ============ */
+function ProductRow({ prod, onAdd }) {
+  const [grams, setGrams] = useState(prod.serving || 100);
+  const fct = grams/100;
+  return (
+    <div style={{ background:"#0F172A", borderRadius:10, padding:12, marginBottom:8, border:"1px solid #334155" }}>
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:8 }}>
+        {prod.img ? <img src={prod.img} alt="" style={{ width:40, height:40, borderRadius:6, objectFit:"cover", background:"#1E293B" }}/> : <div style={{ width:40, height:40, borderRadius:6, background:"#1E293B", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🍫</div>}
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:"#E2E8F0", lineHeight:1.3 }}>{prod.name}</div>
+          <div style={{ fontSize:10, color:"#64748B" }}>per 100g: {prod.kcal100}kcal · P{prod.p100} C{prod.c100} F{prod.f100}{prod.servingTxt?` · porz: ${prod.servingTxt}`:""}</div>
+        </div>
+      </div>
+      <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+        <input type="number" value={grams} onChange={e=>setGrams(Math.max(0,parseInt(e.target.value)||0))}
+          style={{ width:70, padding:"7px 8px", borderRadius:6, border:"1px solid #334155", background:"#1E293B", color:"#E2E8F0", fontSize:13, outline:"none" }}/>
+        <span style={{ fontSize:12, color:"#64748B" }}>g →</span>
+        <span style={{ fontSize:12, color:"#60A5FA", fontWeight:700 }}>{Math.round(prod.kcal100*fct)} kcal</span>
+        <span style={{ fontSize:11, color:"#64748B" }}>P{(prod.p100*fct).toFixed(1)} C{(prod.c100*fct).toFixed(1)} F{(prod.f100*fct).toFixed(1)}</span>
+        <button onClick={()=>onAdd(grams)} style={{ marginLeft:"auto", padding:"7px 14px", borderRadius:6, border:"none", background:"linear-gradient(135deg,#2563EB,#1D4ED8)", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:12 }}>+ Aggiungi</button>
+      </div>
     </div>
   );
 }
