@@ -1,0 +1,6 @@
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; padding: 0; min-height: 100vh; background: #0F172A; }
+body { -webkit-font-smoothing: antialiased; overscroll-behavior-y: none; }
+input, button, select, textarea { font-family: inherit; }
+/* safe-area per notch iPhone */
+#root { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
