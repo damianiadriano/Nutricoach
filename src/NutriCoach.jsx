@@ -368,7 +368,7 @@ function AppInner(){
       <div style={{background:"linear-gradient(135deg,#1E3A5F,#0F172A)",borderBottom:"1px solid #1E293B",padding:"22px 16px 0"}}>
         <div style={{maxWidth:720,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#3B82F6,#06B6D4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🥗</div>
+            <img src="/icon-192.png" alt="" style={{width:36,height:36,borderRadius:10}}/>
             <div><h1 style={{margin:0,fontSize:19,fontWeight:700,color:"#F1F5F9"}}>NutriCoach</h1><p style={{margin:0,fontSize:12,color:"#64748B"}}>Piano su misura · diario · allenamenti · storico versioni</p></div>
             {syncConfigured&&<div onClick={()=>setTab("sync")} style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:"#64748B"}}><span style={{width:8,height:8,borderRadius:"50%",background:{synced:"#34D399",saving:"#FBBF24",connecting:"#60A5FA",error:"#F87171",off:"#475569"}[syncState.status]}}/>{({synced:"Sincronizzato",saving:"Salvataggio…",connecting:"Connessione…",error:"Offline",off:""})[syncState.status]}</div>}
           </div>
