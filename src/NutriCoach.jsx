@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { syncConfigured, ensureSession, pullRemote, pushRemote, exportLinkCode, importLinkCode, getUserId } from "./sync.js";
 
 /* ============ DATABASE ALIMENTI BASE ============ */
@@ -27,21 +27,103 @@ const FOOD_DB = {
   "gelato":{p:4,c:25,f:11,kcal:207,label:"Gelato"},"cioccolato":{p:7,c:50,f:35,kcal:546,label:"Cioccolato"},
   "vino":{p:0,c:2.6,f:0,kcal:83,label:"Vino"},"birra":{p:0.5,c:3.6,f:0,kcal:43,label:"Birra"},
 };
+
+/* ===== Alimenti generici "sciolti" (valori medi per 100g) ===== */
+const GENERIC_DB={
+  // Verdure (crude salvo indicazione)
+  "carote bollite":{p:0.8,c:8,f:0.2,kcal:35,label:"Carote bollite"},"carote":{p:1,c:8,f:0.2,kcal:41,label:"Carote"},
+  "cavolfiore bollito":{p:1.8,c:4,f:0.3,kcal:25,label:"Cavolfiore bollito"},"cavolfiore":{p:2,c:5,f:0.3,kcal:25,label:"Cavolfiore"},
+  "melanzane grigliate":{p:1,c:6,f:0.4,kcal:35,label:"Melanzane grigliate"},"melanzane":{p:1,c:6,f:0.2,kcal:24,label:"Melanzane"},
+  "peperoni":{p:1,c:6,f:0.3,kcal:26,label:"Peperoni"},"finocchi":{p:1.2,c:3,f:0.2,kcal:15,label:"Finocchi"},
+  "sedano":{p:0.7,c:3,f:0.2,kcal:16,label:"Sedano"},"cetrioli":{p:0.7,c:3.6,f:0.1,kcal:12,label:"Cetrioli"},
+  "lattuga":{p:1.4,c:2.9,f:0.2,kcal:15,label:"Lattuga"},"rucola":{p:2.6,c:3.7,f:0.7,kcal:25,label:"Rucola"},
+  "cipolla":{p:1.1,c:9.3,f:0.1,kcal:40,label:"Cipolla"},"funghi":{p:3.1,c:3.3,f:0.3,kcal:22,label:"Funghi"},
+  "zucca":{p:1,c:6.5,f:0.1,kcal:26,label:"Zucca"},"bietole":{p:1.8,c:3.7,f:0.2,kcal:19,label:"Bietole"},
+  "carciofi":{p:3.3,c:10.5,f:0.2,kcal:47,label:"Carciofi"},"cavolo":{p:1.3,c:5.8,f:0.1,kcal:25,label:"Cavolo"},
+  "verza":{p:2,c:6,f:0.1,kcal:27,label:"Verza"},"piselli":{p:5.4,c:14.4,f:0.4,kcal:81,label:"Piselli"},
+  "mais":{p:3.3,c:19,f:1.4,kcal:86,label:"Mais dolce"},
+  // Legumi
+  "lenticchie cotte":{p:9,c:20,f:0.4,kcal:116,label:"Lenticchie cotte"},"lenticchie":{p:25,c:53,f:1.1,kcal:353,label:"Lenticchie secche"},
+  "ceci cotti":{p:8.9,c:27,f:2.6,kcal:164,label:"Ceci cotti"},"ceci":{p:20.5,c:61,f:6,kcal:364,label:"Ceci secchi"},
+  "fagioli cotti":{p:8.7,c:22.8,f:0.5,kcal:127,label:"Fagioli cotti"},"fagioli":{p:21,c:60,f:1.2,kcal:333,label:"Fagioli secchi"},
+  "fave":{p:7.9,c:17.6,f:0.6,kcal:88,label:"Fave fresche"},
+  // Cereali e derivati
+  "farro cotto":{p:5,c:26,f:0.5,kcal:127,label:"Farro cotto"},"farro":{p:15,c:67,f:2.5,kcal:340,label:"Farro crudo"},
+  "quinoa cotta":{p:4.4,c:21,f:1.9,kcal:120,label:"Quinoa cotta"},"quinoa":{p:14,c:64,f:6,kcal:368,label:"Quinoa cruda"},
+  "cous cous cotto":{p:3.8,c:23,f:0.2,kcal:112,label:"Cous cous cotto"},"cous cous":{p:12.8,c:77.4,f:0.6,kcal:376,label:"Cous cous crudo"},
+  "orzo cotto":{p:2.3,c:28,f:0.4,kcal:123,label:"Orzo cotto"},"orzo":{p:10.4,c:70,f:1.4,kcal:354,label:"Orzo perlato crudo"},
+  "riso integrale":{p:7.5,c:77,f:1.9,kcal:362,label:"Riso integrale crudo"},"polenta":{p:8.7,c:76,f:2.7,kcal:358,label:"Farina di mais (polenta)"},
+  "grissini":{p:12,c:68,f:13,kcal:433,unit:8,label:"Grissini (1pz=8g)"},"crackers":{p:9.4,c:80,f:10,kcal:428,unit:8,label:"Crackers (1pz=8g)"},
+  "piadina":{p:8,c:54,f:7,kcal:300,unit:120,label:"Piadina (1pz=120g)"},"gnocchi":{p:3.5,c:28,f:0.5,kcal:133,label:"Gnocchi di patate"},
+  "fette biscottate":{p:11,c:76,f:6,kcal:408,unit:8,label:"Fetta biscottata (1pz=8g)"},
+  "biscotti secchi":{p:7,c:80,f:8,kcal:416,unit:8,label:"Biscotti secchi (1pz=8g)"},
+  "muesli":{p:10,c:62,f:8,kcal:367,label:"Muesli"},"cornflakes":{p:7.5,c:84,f:0.9,kcal:378,label:"Cornflakes"},
+  "cornetto":{p:8,c:45,f:20,kcal:400,unit:60,label:"Cornetto (1pz=60g)"},
+  // Affettati e formaggi
+  "prosciutto crudo":{p:25.5,c:0,f:13,kcal:224,label:"Prosciutto crudo"},"prosciutto cotto":{p:19,c:1,f:7,kcal:145,label:"Prosciutto cotto"},
+  "speck":{p:28,c:0.5,f:21,kcal:301,label:"Speck"},"fesa di tacchino":{p:19,c:1.5,f:2,kcal:104,label:"Fesa di tacchino affettata"},
+  "mozzarella":{p:18,c:1,f:19,kcal:253,label:"Mozzarella"},"parmigiano":{p:33,c:0,f:29,kcal:392,label:"Parmigiano"},
+  "grana":{p:33,c:0,f:29,kcal:398,label:"Grana"},"ricotta":{p:8.8,c:3.5,f:10.9,kcal:146,label:"Ricotta vaccina"},
+  "fiocchi di latte":{p:11,c:3,f:4.5,kcal:99,label:"Fiocchi di latte"},"feta":{p:14,c:4,f:21,kcal:264,label:"Feta"},
+  // Proteine varie
+  "albumi":{p:10.7,c:0.7,f:0.2,kcal:43,unit:33,label:"Albumi (1pz=33g)"},"albume":{p:10.7,c:0.7,f:0.2,kcal:43,unit:33,label:"Albume (1pz=33g)"},"tofu":{p:8,c:1.9,f:4.8,kcal:76,label:"Tofu"},
+  "seitan":{p:24,c:2,f:2,kcal:118,label:"Seitan"},
+  "manzo magro":{p:22,c:0,f:4.5,kcal:129,label:"Manzo magro"},"vitello":{p:20.7,c:0,f:2.7,kcal:107,label:"Vitello"},
+  "lonza di maiale":{p:21,c:0,f:7,kcal:146,label:"Lonza di maiale"},"salsiccia":{p:15,c:0,f:27,kcal:304,label:"Salsiccia"},
+  "hamburger di manzo":{p:18,c:0,f:15,kcal:210,label:"Hamburger di manzo"},
+  // Pesce
+  "orata":{p:20.7,c:1,f:3.8,kcal:121,label:"Orata"},"branzino":{p:16.5,c:0.6,f:2.5,kcal:97,label:"Branzino/Spigola"},
+  "spigola":{p:16.5,c:0.6,f:2.5,kcal:97,label:"Branzino/Spigola"},"sgombro":{p:18.7,c:0,f:14,kcal:205,label:"Sgombro"},
+  "gamberi":{p:18,c:0.5,f:1,kcal:85,label:"Gamberi"},"polpo":{p:17.9,c:1.4,f:1,kcal:82,label:"Polpo"},
+  "calamari":{p:15.6,c:2.4,f:1.7,kcal:92,label:"Calamari"},"sogliola":{p:16.9,c:0.8,f:1.7,kcal:86,label:"Sogliola"},
+  "nasello":{p:17,c:0,f:0.3,kcal:71,label:"Nasello"},"pesce spada":{p:19.7,c:0,f:6.7,kcal:144,label:"Pesce spada"},
+  "alici":{p:20,c:0,f:5,kcal:131,label:"Alici/Acciughe fresche"},"sardine":{p:20.8,c:0,f:4.5,kcal:129,label:"Sardine fresche"},
+  // Frutta
+  "ananas":{p:0.5,c:13,f:0.1,kcal:50,label:"Ananas"},"anguria":{p:0.6,c:7.5,f:0.2,kcal:30,label:"Anguria"},
+  "melone":{p:0.8,c:8,f:0.2,kcal:33,label:"Melone"},"pesca":{p:0.9,c:9.5,f:0.3,kcal:39,unit:150,label:"Pesca (1pz=150g)"},
+  "albicocca":{p:1.4,c:11,f:0.4,kcal:48,unit:45,label:"Albicocca (1pz=45g)"},"uva":{p:0.6,c:16,f:0.2,kcal:61,label:"Uva"},
+  "ciliegie":{p:1,c:16,f:0.2,kcal:63,label:"Ciliegie"},"mango":{p:0.8,c:15,f:0.4,kcal:60,label:"Mango"},
+  "avocado":{p:2,c:9,f:15,kcal:160,unit:200,label:"Avocado (1pz=200g)"},"mandarino":{p:0.8,c:13,f:0.3,kcal:53,unit:80,label:"Mandarino (1pz=80g)"},
+  "prugna":{p:0.7,c:11,f:0.3,kcal:46,unit:60,label:"Prugna (1pz=60g)"},"fichi":{p:0.8,c:19,f:0.3,kcal:74,unit:50,label:"Fico (1pz=50g)"},
+  "cachi":{p:0.6,c:18,f:0.2,kcal:70,unit:200,label:"Caco (1pz=200g)"},"melograno":{p:1.7,c:19,f:1.2,kcal:83,label:"Melograno"},
+  "lamponi":{p:1.2,c:12,f:0.7,kcal:52,label:"Lamponi"},"mirtilli":{p:0.7,c:14,f:0.3,kcal:57,label:"Mirtilli"},
+  // Frutta secca e semi
+  "noci":{p:15,c:14,f:65,kcal:654,unit:5,label:"Noci (1 gheriglio=5g)"},"nocciole":{p:15,c:17,f:61,kcal:628,label:"Nocciole"},
+  "pistacchi":{p:20,c:28,f:45,kcal:560,label:"Pistacchi"},"arachidi":{p:26,c:16,f:49,kcal:567,label:"Arachidi"},
+  "anacardi":{p:18,c:30,f:44,kcal:553,label:"Anacardi"},"semi di chia":{p:17,c:42,f:31,kcal:486,label:"Semi di chia"},
+  "semi di zucca":{p:30,c:11,f:49,kcal:559,label:"Semi di zucca"},"burro di arachidi":{p:25,c:20,f:50,kcal:588,label:"Burro di arachidi"},
+  // Condimenti, latticini, varie
+  "burro":{p:0.9,c:0.1,f:81,kcal:717,label:"Burro"},"zucchero":{p:0,c:100,f:0,kcal:387,label:"Zucchero"},
+  "marmellata":{p:0.4,c:59,f:0.1,kcal:240,label:"Marmellata"},"cacao amaro":{p:20,c:58,f:14,kcal:228,label:"Cacao amaro"},
+  "maionese":{p:1,c:2,f:75,kcal:680,label:"Maionese"},"ketchup":{p:1.2,c:26,f:0.2,kcal:112,label:"Ketchup"},
+  "pesto":{p:5,c:8,f:46,kcal:470,label:"Pesto"},"passata di pomodoro":{p:1.4,c:5,f:0.2,kcal:30,label:"Passata di pomodoro"},
+  "latte":{p:3.3,c:4.9,f:3.6,kcal:64,label:"Latte intero"},"latte di mandorla":{p:0.5,c:3,f:1.1,kcal:24,label:"Latte di mandorla"},
+  "bevanda di avena":{p:0.3,c:8,f:1.5,kcal:45,label:"Bevanda di avena"},
+  "succo di arancia":{p:0.7,c:10,f:0.2,kcal:45,label:"Succo di arancia"},
+  "sushi":{p:7,c:25,f:2.5,kcal:150,label:"Sushi misto"},
+};
+const ALL_DB={...FOOD_DB,...GENERIC_DB};
 const MEAL_SLOTS=[{id:"colazione",label:"Colazione",icon:"☀️"},{id:"spuntino1",label:"Spuntino mattino",icon:"🍎"},{id:"pranzo",label:"Pranzo",icon:"🥗"},{id:"spuntino2",label:"Spuntino pomeriggio",icon:"🍵"},{id:"cena",label:"Cena",icon:"🌙"}];
 const WORKOUT_TYPES=[{id:"padel",label:"Padel",icon:"🎾",est:600},{id:"corpolibero",label:"Corpo libero",icon:"🤸",est:250},{id:"corsa",label:"Corsa",icon:"🏃",est:400},{id:"camminata",label:"Camminata",icon:"🚶",est:200},{id:"bici",label:"Bici",icon:"🚴",est:350},{id:"pesi",label:"Pesi / palestra",icon:"🏋️",est:300},{id:"nuoto",label:"Nuoto",icon:"🏊",est:450},{id:"altro",label:"Altro",icon:"💪",est:250}];
 const DOW=["Domenica","Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato"];
 
 /* ============ HELPERS ============ */
-function parseEntry(text){
+const norm=s=>s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+function parseEntry(text,customFoods={}){
+  const DB={...ALL_DB,...customFoods};
   const results=[],unknown=[];
   const parts=text.split(/[,\n]|\se\s|\+/).map(s=>s.trim()).filter(Boolean);
   for(const part of parts){
-    const lower=part.toLowerCase(); let grams=null,count=null;
+    const lower=norm(part); let grams=null,count=null;
+    const kgM=lower.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|chilo|chili)\b/);
+    const ettoM=lower.match(/(\d+(?:[.,]\d+)?)\s*(?:etto|etti)\b/);
     const gM=lower.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|grammi|ml)\b/), nM=lower.match(/^(\d+(?:[.,]\d+)?)\s+/);
-    if(gM)grams=parseFloat(gM[1].replace(",","."));else if(nM)count=parseFloat(nM[1].replace(",","."));
-    let fk=null,bl=0; for(const k of Object.keys(FOOD_DB)){if(lower.includes(k)&&k.length>bl){fk=k;bl=k.length;}}
+    if(kgM)grams=parseFloat(kgM[1].replace(",","."))*1000;
+    else if(ettoM)grams=parseFloat(ettoM[1].replace(",","."))*100;
+    else if(gM)grams=parseFloat(gM[1].replace(",","."));else if(nM)count=parseFloat(nM[1].replace(",","."));
+    let fk=null,bl=0; for(const k of Object.keys(DB)){if(lower.includes(norm(k))&&k.length>bl){fk=k;bl=k.length;}}
     if(!fk){unknown.push(part);continue;}
-    const food=FOOD_DB[fk]; let g;
+    const food=DB[fk]; let g;
     if(grams!=null)g=grams;else if(count!=null&&food.unit)g=count*food.unit;else if(count!=null)g=count*100;else if(food.unit)g=food.unit;else g=100;
     const fct=g/100;
     results.push({label:food.label,grams:Math.round(g),kcal:Math.round(food.kcal*fct),p:+(food.p*fct).toFixed(1),c:+(food.c*fct).toFixed(1),f:+(food.f*fct).toFixed(1)});
@@ -49,7 +131,7 @@ function parseEntry(text){
   return {results,unknown};
 }
 const sum=items=>items.reduce((a,i)=>({kcal:a.kcal+i.kcal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{kcal:0,c:0,p:0,f:0});
-const todayKey=(d=new Date())=>d.toISOString().slice(0,10);
+const todayKey=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const fmtDate=k=>{const d=new Date(k+"T12:00:00");return `${DOW[d.getDay()]} ${d.getDate()}/${d.getMonth()+1}`;};
 const fmtShort=k=>{const d=new Date(k+"T12:00:00");return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;};
 
@@ -125,7 +207,26 @@ function planForDate(plans, dateKey){
 }
 
 /* ============ APP ============ */
-export default function App(){
+class ErrorBoundary extends Component{
+  constructor(p){super(p);this.state={err:null};}
+  static getDerivedStateFromError(e){return{err:e};}
+  render(){
+    if(this.state.err)return(
+      <div style={{fontFamily:"sans-serif",background:"#0F172A",minHeight:"100vh",color:"#E2E8F0",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div style={{textAlign:"center",maxWidth:420}}>
+          <div style={{fontSize:40,marginBottom:12}}>🛟</div>
+          <h2 style={{margin:"0 0 8px",fontSize:18}}>Qualcosa è andato storto</h2>
+          <p style={{fontSize:13,color:"#94A3B8",lineHeight:1.6}}>I tuoi dati sono al sicuro. Ricarica l'app per riprendere.</p>
+          <button onClick={()=>location.reload()} style={{marginTop:12,padding:"10px 20px",borderRadius:8,border:"none",background:"#2563EB",color:"#fff",fontWeight:700,cursor:"pointer"}}>Ricarica</button>
+        </div>
+      </div>);
+    return this.props.children;
+  }
+}
+
+export default function App(){return <ErrorBoundary><AppInner/></ErrorBoundary>;}
+
+function AppInner(){
   const [tab,setTab]=useState("oggi");
   const [selectedDate,setSelectedDate]=useState(todayKey());
   const [days,setDays]=useState({});
@@ -139,29 +240,51 @@ export default function App(){
   const [searchRes,setSearchRes]=useState([]);
   const [searching,setSearching]=useState(false);
   const [searchErr,setSearchErr]=useState(null);
+  const [newFood,setNewFood]=useState(null); // {slot,name,kcal,p,c,f,grams}
   const [woType,setWoType]=useState("padel");const [woKcal,setWoKcal]=useState("");const [woDur,setWoDur]=useState("");const [woNote,setWoNote]=useState("");
   const [wizard,setWizard]=useState(null); // stato wizard creazione piano
   const [weights,setWeights]=useState({}); // {dateKey: kg}
+  const [customFoods,setCustomFoods]=useState({}); // {nome: {p,c,f,kcal,label,unit?}}
   const [wInput,setWInput]=useState("");
   const [syncState,setSyncState]=useState({status:"off",last:null}); // off|connecting|synced|error|saving
   const pushTimer=useRef(null);
+  const latestPayload=useRef(null);
+
+  // Flush immediato quando l'app va in background (iOS può congelare la PWA)
+  useEffect(()=>{
+    const flush=()=>{
+      if(!syncConfigured||!latestPayload.current)return;
+      if(pushTimer.current){clearTimeout(pushTimer.current);pushTimer.current=null;}
+      pushRemote(latestPayload.current);
+    };
+    const onVis=()=>{if(document.visibilityState==="hidden")flush();};
+    document.addEventListener("visibilitychange",onVis);
+    window.addEventListener("pagehide",flush);
+    return ()=>{document.removeEventListener("visibilitychange",onVis);window.removeEventListener("pagehide",flush);};
+  },[]);
 
   // helper: applica un payload a tutti gli stati
-  const applyPayload=(d)=>{ if(!d)return; setDays(d.days||{}); setPlans(d.plans||[]); setWeights(d.weights||{}); };
+  const applyPayload=(d)=>{ if(!d)return; setDays(d.days||{}); setPlans(d.plans||[]); setWeights(d.weights||{}); setCustomFoods(d.customFoods||{}); };
 
-  // 1) carica subito da localStorage (offline-first), poi prova il cloud
+  // 1) carica subito da localStorage (offline-first), poi confronta col cloud: vince il più recente
   useEffect(()=>{
-    try{const raw=localStorage.getItem("tracker-v4");if(raw)applyPayload(JSON.parse(raw));}catch(e){}
+    let localPayload=null;
+    try{const raw=localStorage.getItem("tracker-v4");if(raw){localPayload=JSON.parse(raw);applyPayload(localPayload);}}catch(e){}
     (async()=>{
       if(syncConfigured){
         setSyncState({status:"connecting",last:null});
         const user=await ensureSession();
         if(user){
           const remote=await pullRemote();
-          if(remote&&remote.payload){
-            // se il remoto è più completo del locale, usa il remoto
+          const localTs=parseInt(localStorage.getItem("tracker-v4-ts")||"0");
+          const remoteTs=remote?.updatedAt?new Date(remote.updatedAt).getTime():0;
+          if(remote&&remote.payload&&remoteTs>=localTs){
+            // il cloud è pari o più recente → applicalo
             applyPayload(remote.payload);
-            try{localStorage.setItem("tracker-v4",JSON.stringify(remote.payload));}catch(e){}
+            try{localStorage.setItem("tracker-v4",JSON.stringify(remote.payload));localStorage.setItem("tracker-v4-ts",String(remoteTs));}catch(e){}
+          }else if(localPayload&&localTs>remoteTs){
+            // il locale è più recente (es. modifiche offline) → proteggilo e spingilo al cloud
+            pushRemote(localPayload);
           }
           setSyncState({status:"synced",last:Date.now()});
         }else{
@@ -175,8 +298,9 @@ export default function App(){
   // 2) salva su localStorage sempre + push al cloud con debounce
   useEffect(()=>{
     if(!loaded)return;
-    const payload={days,plans,weights};
-    try{localStorage.setItem("tracker-v4",JSON.stringify(payload));}catch(e){console.error(e);}
+    const payload={days,plans,weights,customFoods};
+    latestPayload.current=payload;
+    try{localStorage.setItem("tracker-v4",JSON.stringify(payload));localStorage.setItem("tracker-v4-ts",String(Date.now()));}catch(e){console.error(e);}
     if(syncConfigured){
       if(pushTimer.current)clearTimeout(pushTimer.current);
       setSyncState(s=>({...s,status:"saving"}));
@@ -185,7 +309,7 @@ export default function App(){
         setSyncState({status:ok?"synced":"error",last:ok?Date.now():null});
       },1200);
     }
-  },[days,plans,weights,loaded]);
+  },[days,plans,weights,customFoods,loaded]);
 
   const activePlan = planForDate(plans, selectedDate);
   const curDay=days[selectedDate]||{dayType:"normale",logs:{},workouts:[]};
@@ -198,10 +322,11 @@ export default function App(){
 
   const updateDay=patch=>setDays(prev=>{const ex=prev[selectedDate]||{dayType:"normale",logs:{},workouts:[]};return{...prev,[selectedDate]:{...ex,...patch}};});
   const setDayType=t=>updateDay({dayType:t});
-  const allItems=Object.values(logs).flat();const totals=sum(allItems);
+  const allItems=useMemo(()=>Object.values(logs).flat(),[logs]);
+  const totals=useMemo(()=>sum(allItems),[allItems]);
   const burned=workouts.reduce((a,w)=>a+(w.kcal||0),0);const netKcal=totals.kcal-burned;
 
-  const addEntry=slotId=>{const text=(inputs[slotId]||"").trim();if(!text)return;const{results,unknown}=parseEntry(text);if(results.length)updateDay({logs:{...logs,[slotId]:[...(logs[slotId]||[]),...results]}});setWarnings(p=>({...p,[slotId]:unknown}));setInputs(p=>({...p,[slotId]:""}));};
+  const addEntry=slotId=>{const text=(inputs[slotId]||"").trim();if(!text)return;const{results,unknown}=parseEntry(text,customFoods);if(results.length)updateDay({logs:{...logs,[slotId]:[...(logs[slotId]||[]),...results]}});setWarnings(p=>({...p,[slotId]:unknown}));setInputs(p=>({...p,[slotId]:""}));};
   const removeItem=(slotId,idx)=>updateDay({logs:{...logs,[slotId]:logs[slotId].filter((_,i)=>i!==idx)}});
   const addProduct=(slotId,prod,grams)=>{const fct=grams/100;const item={label:prod.name,grams:Math.round(grams),kcal:Math.round(prod.kcal100*fct),p:+(prod.p100*fct).toFixed(1),c:+(prod.c100*fct).toFixed(1),f:+(prod.f100*fct).toFixed(1)};updateDay({logs:{...logs,[slotId]:[...(logs[slotId]||[]),item]}});};
   const runSearch=async()=>{const q=searchQ.trim();if(!q)return;setSearching(true);setSearchErr(null);setSearchRes([]);try{const r=await searchOFF(q);if(!r.length)setSearchErr("Nessun prodotto trovato. Prova con marca + nome (es: 'muller caffè').");setSearchRes(r);}catch(e){setSearchErr("Ricerca non disponibile (connessione o troppe richieste). Riprova tra poco.");}setSearching(false);};
@@ -232,7 +357,7 @@ export default function App(){
     else verdict={txt:"Sulla buona strada, continua così",color:"#60A5FA",emoji:"👍"};
   }
 
-  const historyKeys=Object.keys(days).filter(k=>{const d=days[k];return Object.values(d.logs||{}).flat().length||(d.workouts||[]).length;}).sort().reverse();
+  const historyKeys=useMemo(()=>Object.keys(days).filter(k=>{const d=days[k];return Object.values(d.logs||{}).flat().length||(d.workouts||[]).length;}).sort().reverse(),[days]);
 
   const savePlan=(plan)=>{ setPlans(prev=>[...prev.filter(p=>p.validFrom!==plan.validFrom), plan]); setWizard(null); setTab("piano"); };
 
@@ -306,7 +431,9 @@ export default function App(){
                   <button onClick={()=>addEntry(slot.id)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+</button>
                 </div>
                 <button onClick={()=>{setSearchSlot(slot.id);setSearchQ("");setSearchRes([]);setSearchErr(null);}} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed #475569",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:12,marginBottom:items.length?12:0}}>🔍 Cerca un prodotto confezionato (es. "muller caffè")</button>
-                {warnings[slot.id]?.length>0&&<div style={{background:"#422006",borderRadius:8,padding:"8px 12px",margin:"10px 0",fontSize:11,color:"#FBBF24"}}>⚠️ Non riconosciuto: {warnings[slot.id].join(", ")}. Usa grammi espliciti.</div>}
+                {warnings[slot.id]?.length>0&&<div style={{background:"#422006",borderRadius:8,padding:"8px 12px",margin:"10px 0",fontSize:11,color:"#FBBF24"}}>⚠️ Non riconosciuto: {warnings[slot.id].join(", ")}.
+                  <button onClick={()=>setNewFood({slot:slot.id,name:warnings[slot.id][0].replace(/^\d+(?:[.,]\d+)?\s*(?:kg|etti?|g|gr|grammi|ml)?\s*/i,""),kcal:"",p:"",c:"",f:"",grams:"100"})} style={{display:"block",marginTop:8,padding:"7px 12px",borderRadius:6,border:"none",background:"#D97706",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:11}}>➕ Crealo come alimento personalizzato</button>
+                </div>}
                 {items.map((it,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #0F172A"}}><div style={{flex:1}}><div style={{fontSize:13,color:"#E2E8F0",fontWeight:600}}>{it.label} <span style={{color:"#64748B",fontWeight:400}}>· {it.grams}g</span></div><div style={{fontSize:11,color:"#64748B"}}>P:{it.p} C:{it.c} F:{it.f}</div></div><span style={{fontSize:13,color:"#60A5FA",fontWeight:700}}>{it.kcal}</span><button onClick={()=>removeItem(slot.id,i)} style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:16,padding:4}}>×</button></div>))}
               </div>)}
             </div>);})}
@@ -365,6 +492,44 @@ export default function App(){
             </div>);})}
         </>)}
       </div>
+
+      {/* ===== MODALE NUOVO ALIMENTO ===== */}
+      {newFood&&(
+        <div onClick={()=>setNewFood(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#1E293B",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,padding:"16px 16px 28px",border:"1px solid #334155"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"#F1F5F9"}}>➕ Nuovo alimento personalizzato</h3>
+              <button onClick={()=>setNewFood(null)} style={{background:"none",border:"none",color:"#64748B",fontSize:22,cursor:"pointer"}}>×</button>
+            </div>
+            <p style={{margin:"0 0 14px",fontSize:11,color:"#64748B",lineHeight:1.5}}>Copia i valori <strong>per 100g</strong> dall'etichetta o da una tabella nutrizionale. Lo salverai una volta sola: poi basterà scriverne il nome.</p>
+            <label style={{fontSize:11,color:"#94A3B8",display:"block",marginBottom:4}}>Nome (come lo scriverai nei pasti)</label>
+            <input value={newFood.name} onChange={e=>setNewFood(f=>({...f,name:e.target.value}))} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:14,outline:"none",boxSizing:"border-box",marginBottom:10}}/>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
+              {[["kcal","Kcal/100g"],["p","Prot/100g"],["c","Carb/100g"],["f","Grassi/100g"]].map(([k,l])=>(
+                <div key={k}><label style={{fontSize:10,color:"#94A3B8",display:"block",marginBottom:4}}>{l}</label>
+                <input inputMode="decimal" value={newFood[k]} onChange={e=>setNewFood(f=>({...f,[k]:e.target.value}))} style={{width:"100%",padding:"9px 8px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
+              ))}
+            </div>
+            <label style={{fontSize:11,color:"#94A3B8",display:"block",marginBottom:4}}>Quanti grammi aggiungere ora al pasto</label>
+            <input inputMode="decimal" value={newFood.grams} onChange={e=>setNewFood(f=>({...f,grams:e.target.value}))} style={{width:120,padding:"9px 10px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,outline:"none",marginBottom:14}}/>
+            <button onClick={()=>{
+              const name=newFood.name.trim().toLowerCase();
+              const kcal=parseFloat(String(newFood.kcal).replace(",","."));
+              const p=parseFloat(String(newFood.p).replace(",","."))||0;
+              const c=parseFloat(String(newFood.c).replace(",","."))||0;
+              const f=parseFloat(String(newFood.f).replace(",","."))||0;
+              const grams=parseFloat(String(newFood.grams).replace(",","."))||100;
+              if(!name||!kcal)return;
+              const entry={p,c,f,kcal,label:newFood.name.trim()+" ⭐"};
+              setCustomFoods(prev=>({...prev,[name]:entry}));
+              const fct=grams/100;
+              updateDay({logs:{...logs,[newFood.slot]:[...(logs[newFood.slot]||[]),{label:entry.label,grams:Math.round(grams),kcal:Math.round(kcal*fct),p:+(p*fct).toFixed(1),c:+(c*fct).toFixed(1),f:+(f*fct).toFixed(1)}]}});
+              setWarnings(w=>({...w,[newFood.slot]:[]}));
+              setNewFood(null);
+            }} disabled={!newFood.name.trim()||!parseFloat(String(newFood.kcal).replace(",","."))} style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:(newFood.name.trim()&&parseFloat(String(newFood.kcal).replace(",",".")))?"linear-gradient(135deg,#059669,#047857)":"#334155",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14}}>✓ Salva e aggiungi al pasto</button>
+          </div>
+        </div>
+      )}
 
       {/* ===== MODALE RICERCA PRODOTTO ===== */}
       {searchSlot&&(
