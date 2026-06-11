@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { syncConfigured, ensureSession, pullRemote, pushRemote, exportLinkCode, importLinkCode, getUserId } from "./sync.js";
+import { estimateFromText, estimateFromPhoto } from "./estimate.js";
 
 /* ============ DATABASE ALIMENTI BASE ============ */
 const FOOD_DB = {
@@ -241,6 +242,7 @@ function AppInner(){
   const [searching,setSearching]=useState(false);
   const [searchErr,setSearchErr]=useState(null);
   const [newFood,setNewFood]=useState(null); // {slot,name,kcal,p,c,f,grams}
+  const [estimate,setEstimate]=useState(null); // {slot, mode, loading, error, rows, fromPhoto, scaleObjectFound, scaleNote, contextText}
   const [woType,setWoType]=useState("padel");const [woKcal,setWoKcal]=useState("");const [woDur,setWoDur]=useState("");const [woNote,setWoNote]=useState("");
   const [wizard,setWizard]=useState(null); // stato wizard creazione piano
   const [weights,setWeights]=useState({}); // {dateKey: kg}
@@ -330,6 +332,45 @@ function AppInner(){
   const removeItem=(slotId,idx)=>updateDay({logs:{...logs,[slotId]:logs[slotId].filter((_,i)=>i!==idx)}});
   const addProduct=(slotId,prod,grams)=>{const fct=grams/100;const item={label:prod.name,grams:Math.round(grams),kcal:Math.round(prod.kcal100*fct),p:+(prod.p100*fct).toFixed(1),c:+(prod.c100*fct).toFixed(1),f:+(prod.f100*fct).toFixed(1)};updateDay({logs:{...logs,[slotId]:[...(logs[slotId]||[]),item]}});};
   const runSearch=async()=>{const q=searchQ.trim();if(!q)return;setSearching(true);setSearchErr(null);setSearchRes([]);try{const r=await searchOFF(q);if(!r.length)setSearchErr("Nessun prodotto trovato. Prova con marca + nome (es: 'muller caffè').");setSearchRes(r);}catch(e){setSearchErr("Ricerca non disponibile (connessione o troppe richieste). Riprova tra poco.");}setSearching(false);};
+
+  // ---- Stima nutrizionale (testo o foto) ----
+  const openEstimate=slot=>setEstimate({slot,mode:"choose",loading:false,error:null,rows:[],fromPhoto:false,scaleObjectFound:null,scaleNote:"",contextText:""});
+  const doEstimateText=async()=>{
+    const t=(estimate.contextText||"").trim(); if(!t)return;
+    setEstimate(e=>({...e,loading:true,error:null}));
+    try{
+      const res=await estimateFromText(t);
+      setEstimate(e=>({...e,loading:false,fromPhoto:false,scaleObjectFound:null,scaleNote:res.scaleNote||"",rows:(res.items||[]).map(toRow)}));
+    }catch(err){setEstimate(e=>({...e,loading:false,error:err.message}));}
+  };
+  const doEstimatePhoto=async(file)=>{
+    if(!file)return;
+    setEstimate(e=>({...e,loading:true,error:null,fromPhoto:true}));
+    try{
+      const res=await estimateFromPhoto(file,estimate.contextText||"");
+      setEstimate(e=>({...e,loading:false,fromPhoto:true,scaleObjectFound:res.scaleObjectFound,scaleNote:res.scaleNote||"",rows:(res.items||[]).map(r=>toRow(r,true))}));
+    }catch(err){setEstimate(e=>({...e,loading:false,error:err.message}));}
+  };
+  const toRow=(it,fromPhoto=false)=>({...it,include:true,fromPhoto, confidence: fromPhoto && it.confidence==="alta" ? "media" : it.confidence});
+  const updateRow=(i,patch)=>setEstimate(e=>{const rows=[...e.rows];rows[i]={...rows[i],...patch};return{...e,rows};});
+  const insertEstimateRows=()=>{
+    const sel=estimate.rows.filter(r=>r.include);
+    if(!sel.length){setEstimate(null);return;}
+    const newItems=sel.map(r=>{
+      const fct=r.grams/100;
+      const src=r.fromPhoto?` (foto${estimate.contextText?"":""})`:"";
+      const dishCtx=estimate.contextText?` da ${estimate.contextText.slice(0,30)}`:"";
+      return {label:`${r.name}${r.fromPhoto?` · recuperato da piatto${dishCtx} (foto)`:dishCtx?`·${dishCtx}`:""}`,
+        grams:Math.round(r.grams),kcal:Math.round(r.kcal100*fct),p:+(r.p100*fct).toFixed(1),c:+(r.c100*fct).toFixed(1),f:+(r.f100*fct).toFixed(1),
+        est:true, fromPhoto:r.fromPhoto, conf:r.confidence};
+    });
+    // salva eventuali come alimenti personalizzati ⭐
+    const customAdds={};
+    sel.forEach(r=>{if(r.saveCustom){customAdds[r.name.toLowerCase()]={p:r.p100,c:r.c100,f:r.f100,kcal:r.kcal100,label:r.name+" ⭐"};}});
+    if(Object.keys(customAdds).length)setCustomFoods(prev=>({...prev,...customAdds}));
+    updateDay({logs:{...logs,[estimate.slot]:[...(logs[estimate.slot]||[]),...newItems]}});
+    setEstimate(null);
+  };
   const clearDay=()=>updateDay({logs:{},workouts:[]});
   const addWorkout=()=>{const kcal=parseInt(woKcal);if(!kcal||kcal<=0)return;const t=WORKOUT_TYPES.find(w=>w.id===woType);updateDay({workouts:[...workouts,{id:Date.now(),type:woType,label:t.label,icon:t.icon,kcal,dur:woDur?parseInt(woDur):null,note:woNote.trim()||null}]});setWoKcal("");setWoDur("");setWoNote("");};
   const removeWorkout=id=>updateDay({workouts:workouts.filter(w=>w.id!==id)});
@@ -430,11 +471,12 @@ function AppInner(){
                   <input value={inputs[slot.id]||""} onChange={e=>setInputs(p=>({...p,[slot.id]:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter")addEntry(slot.id);}} placeholder="es: 150g pollo, 80g riso, 2 uova" style={{flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,outline:"none"}}/>
                   <button onClick={()=>addEntry(slot.id)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+</button>
                 </div>
-                <button onClick={()=>{setSearchSlot(slot.id);setSearchQ("");setSearchRes([]);setSearchErr(null);}} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed #475569",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:12,marginBottom:items.length?12:0}}>🔍 Cerca un prodotto confezionato (es. "muller caffè")</button>
+                <button onClick={()=>{setSearchSlot(slot.id);setSearchQ("");setSearchRes([]);setSearchErr(null);}} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed #475569",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:12,marginBottom:8}}>🔍 Cerca un prodotto confezionato (es. "muller caffè")</button>
+                <button onClick={()=>openEstimate(slot.id)} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed #6D28D9",background:"#2E1065",color:"#C4B5FD",cursor:"pointer",fontSize:12,marginBottom:items.length?12:0}}>✨ Stima un piatto (testo o foto)</button>
                 {warnings[slot.id]?.length>0&&<div style={{background:"#422006",borderRadius:8,padding:"8px 12px",margin:"10px 0",fontSize:11,color:"#FBBF24"}}>⚠️ Non riconosciuto: {warnings[slot.id].join(", ")}.
                   <button onClick={()=>setNewFood({slot:slot.id,name:warnings[slot.id][0].replace(/^\d+(?:[.,]\d+)?\s*(?:kg|etti?|g|gr|grammi|ml)?\s*/i,""),kcal:"",p:"",c:"",f:"",grams:"100"})} style={{display:"block",marginTop:8,padding:"7px 12px",borderRadius:6,border:"none",background:"#D97706",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:11}}>➕ Crealo come alimento personalizzato</button>
                 </div>}
-                {items.map((it,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #0F172A"}}><div style={{flex:1}}><div style={{fontSize:13,color:"#E2E8F0",fontWeight:600}}>{it.label} <span style={{color:"#64748B",fontWeight:400}}>· {it.grams}g</span></div><div style={{fontSize:11,color:"#64748B"}}>P:{it.p} C:{it.c} F:{it.f}</div></div><span style={{fontSize:13,color:"#60A5FA",fontWeight:700}}>{it.kcal}</span><button onClick={()=>removeItem(slot.id,i)} style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:16,padding:4}}>×</button></div>))}
+                {items.map((it,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #0F172A"}}><div style={{flex:1}}><div style={{fontSize:13,color:"#E2E8F0",fontWeight:600}}>{it.fromPhoto&&<span title="Stima da foto" style={{marginRight:4}}>📷</span>}{it.est&&!it.fromPhoto&&<span title="Stima" style={{marginRight:4}}>✨</span>}{it.label} <span style={{color:"#64748B",fontWeight:400}}>· {it.grams}g</span></div><div style={{fontSize:11,color:"#64748B"}}>P:{it.p} C:{it.c} F:{it.f}</div></div><span style={{fontSize:13,color:"#60A5FA",fontWeight:700}}>{it.kcal}</span><button onClick={()=>removeItem(slot.id,i)} style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:16,padding:4}}>×</button></div>))}
               </div>)}
             </div>);})}
           {(allItems.length>0||workouts.length>0)&&<button onClick={clearDay} style={{marginTop:6,padding:"8px 14px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#64748B",cursor:"pointer",fontSize:12}}>↺ Azzera questo giorno</button>}
@@ -492,6 +534,90 @@ function AppInner(){
             </div>);})}
         </>)}
       </div>
+
+      {/* ===== MODALE STIMA PIATTO ===== */}
+      {estimate&&(
+        <div onClick={()=>setEstimate(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#1E293B",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,maxHeight:"88vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
+            <div style={{padding:"16px 16px 12px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"#F1F5F9"}}>✨ Stima piatto · {MEAL_SLOTS.find(m=>m.id===estimate.slot)?.label}</h3>
+              <button onClick={()=>setEstimate(null)} style={{background:"none",border:"none",color:"#64748B",fontSize:22,cursor:"pointer"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",padding:"14px 16px 24px"}}>
+              {/* fase scelta / input */}
+              {estimate.rows.length===0&&!estimate.loading&&(<>
+                <p style={{margin:"0 0 10px",fontSize:12,color:"#94A3B8",lineHeight:1.5}}>Descrivi il piatto con i grammi indicativi, oppure scatta/carica una foto. Otterrai una lista di ingredienti modificabile.</p>
+                <textarea value={estimate.contextText} onChange={e=>setEstimate(es=>({...es,contextText:e.target.value}))} rows={3} placeholder="es: stracotto di vitello al vino ~200g, patate al forno 100g" style={{width:"100%",padding:"11px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:14,outline:"none",boxSizing:"border-box",resize:"vertical",marginBottom:10}}/>
+                <button onClick={doEstimateText} disabled={!estimate.contextText.trim()} style={{width:"100%",padding:"11px",borderRadius:8,border:"none",background:estimate.contextText.trim()?"linear-gradient(135deg,#7C3AED,#5B21B6)":"#334155",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,marginBottom:12}}>Stima dal testo</button>
+                <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0 12px"}}><div style={{flex:1,height:1,background:"#334155"}}/><span style={{fontSize:11,color:"#64748B"}}>oppure</span><div style={{flex:1,height:1,background:"#334155"}}/></div>
+                <label style={{display:"block",width:"100%",padding:"11px",borderRadius:8,border:"1px dashed #6D28D9",background:"#2E1065",color:"#C4B5FD",fontWeight:700,fontSize:14,textAlign:"center",cursor:"pointer",boxSizing:"border-box"}}>
+                  📷 Scatta o carica una foto
+                  <input type="file" accept="image/*" capture="environment" onChange={e=>doEstimatePhoto(e.target.files?.[0])} style={{display:"none"}}/>
+                </label>
+                <div style={{background:"#3B1212",border:"1px solid #7F1D1D",borderRadius:8,padding:"10px 12px",marginTop:12,fontSize:11,color:"#FCA5A5",lineHeight:1.5}}>
+                  ⚠️ <strong>La stima è approssimativa</strong>, soprattutto da foto. Verifica sempre grammi e condimenti prima di salvare. Includi un oggetto di riferimento nella foto (forchetta, telefono) per una stima dei pesi più sensata.
+                </div>
+              </>)}
+
+              {/* loading */}
+              {estimate.loading&&<div style={{textAlign:"center",padding:30,color:"#C4B5FD",fontSize:13}}>🔮 Sto analizzando{estimate.fromPhoto?" la foto":""}…</div>}
+
+              {/* errore con fallback */}
+              {estimate.error&&!estimate.loading&&(
+                <div style={{background:"#3B1212",border:"1px solid #7F1D1D",borderRadius:8,padding:"12px 14px",fontSize:12,color:"#FCA5A5"}}>
+                  {estimate.error}
+                  <div style={{marginTop:10,color:"#94A3B8"}}>Puoi sempre inserire i valori a mano: chiudi e usa il campo di testo del pasto o "➕ alimento personalizzato".</div>
+                  <button onClick={()=>setEstimate(es=>({...es,error:null,rows:[]}))} style={{marginTop:10,padding:"7px 12px",borderRadius:6,border:"1px solid #475569",background:"transparent",color:"#C4B5FD",cursor:"pointer",fontSize:12}}>Riprova</button>
+                </div>
+              )}
+
+              {/* risultati editabili */}
+              {estimate.rows.length>0&&!estimate.loading&&(<>
+                {estimate.fromPhoto&&(
+                  <div style={{background:"#3B1212",border:"1px solid #7F1D1D",borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:11,color:"#FCA5A5",lineHeight:1.5}}>
+                    📷 <strong>Stima da immagine:</strong> il valore può essere impreciso, verifica e correggi grammi e condimenti prima di salvare.
+                  </div>
+                )}
+                {estimate.fromPhoto&&estimate.scaleObjectFound===false&&(
+                  <div style={{background:"#422006",border:"1px solid #B45309",borderRadius:8,padding:"10px 12px",marginBottom:10,fontSize:11,color:"#FBBF24",lineHeight:1.5}}>
+                    📏 <strong>Nessun oggetto di scala riconosciuto</strong> nella foto. La stima dei pesi è meno affidabile. Per migliorarla, rifai la foto con un riferimento accanto al piatto (forchetta, coltello, telefono), oppure prosegui correggendo a mano i grammi.
+                  </div>
+                )}
+                {estimate.fromPhoto&&estimate.scaleObjectFound===true&&(
+                  <div style={{background:"#0F2A1E",border:"1px solid #059669",borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:11,color:"#6EE7B7"}}>📏 Oggetto di scala riconosciuto: stima dei pesi più attendibile (ma sempre da verificare).</div>
+                )}
+                <div style={{fontSize:11,color:"#64748B",marginBottom:8}}>Rivedi e correggi ogni riga, poi inseriscile nel diario.</div>
+                {estimate.rows.map((r,i)=>{
+                  const confColor={alta:"#34D399",media:"#FBBF24",bassa:"#F87171"}[r.confidence];
+                  const fct=r.grams/100;
+                  return (
+                    <div key={i} style={{background:"#0F172A",borderRadius:10,padding:12,marginBottom:8,border:"1px solid #334155",opacity:r.include?1:0.45}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <input type="checkbox" checked={r.include} onChange={e=>updateRow(i,{include:e.target.checked})} style={{width:18,height:18,accentColor:"#7C3AED"}}/>
+                        <input value={r.name} onChange={e=>updateRow(i,{name:e.target.value})} style={{flex:1,padding:"7px 9px",borderRadius:6,border:"1px solid #334155",background:"#1E293B",color:"#E2E8F0",fontSize:13,outline:"none"}}/>
+                        <span style={{fontSize:10,fontWeight:700,color:confColor,background:"#1E293B",borderRadius:6,padding:"3px 7px",whiteSpace:"nowrap"}}>{r.confidence}</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
+                        <input type="number" value={r.grams} onChange={e=>updateRow(i,{grams:Math.max(0,parseInt(e.target.value)||0)})} style={{width:64,padding:"6px 8px",borderRadius:6,border:"1px solid #334155",background:"#1E293B",color:"#E2E8F0",fontSize:13,outline:"none"}}/>
+                        <span style={{fontSize:11,color:"#64748B"}}>g →</span>
+                        <span style={{fontSize:13,color:"#60A5FA",fontWeight:700}}>{Math.round(r.kcal100*fct)} kcal</span>
+                        <span style={{fontSize:11,color:"#64748B"}}>P{(r.p100*fct).toFixed(1)} C{(r.c100*fct).toFixed(1)} F{(r.f100*fct).toFixed(1)}</span>
+                      </div>
+                      <div style={{fontSize:10,color:"#475569",marginBottom:6}}>per 100g: {r.kcal100}kcal · P{r.p100} C{r.c100} F{r.f100}{r.note?` · ${r.note}`:""}</div>
+                      <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#94A3B8",cursor:"pointer"}}>
+                        <input type="checkbox" checked={!!r.saveCustom} onChange={e=>updateRow(i,{saveCustom:e.target.checked})} style={{accentColor:"#D97706"}}/>
+                        Salva come alimento personalizzato ⭐ (riutilizzabile)
+                      </label>
+                    </div>
+                  );
+                })}
+                <button onClick={insertEstimateRows} style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#059669,#047857)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,marginTop:6}}>✓ Inserisci {estimate.rows.filter(r=>r.include).length} voci nel diario</button>
+                <button onClick={()=>setEstimate(es=>({...es,rows:[],error:null}))} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#64748B",cursor:"pointer",fontSize:12,marginTop:8}}>↺ Rifai la stima</button>
+              </>)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== MODALE NUOVO ALIMENTO ===== */}
       {newFood&&(
