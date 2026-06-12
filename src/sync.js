@@ -1,14 +1,14 @@
 // ============================================================
-//  Sincronizzazione anonima con Supabase
-//  - Nessun dato personale: solo un utente anonimo (ID casuale)
-//  - I dati dell'app vivono in una riga legata a quell'ID
+//  Sincronizzazione con Supabase + autenticazione email
+//  - Account email+password con alias, conferma email, reset password
+//  - Multi-profilo sullo stesso dispositivo (logout/login)
 //  - localStorage resta la cache locale: l'app funziona anche offline
 // ============================================================
 import { createClient } from "@supabase/supabase-js";
 
 // 🔧 Incolla qui i due valori dal tuo progetto Supabase (vedi GUIDA-SUPABASE.md)
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://zuatjmrvvbawibtnszor.supabase.co";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp1YXRqbXJ2dmJhd2lidG5zem9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNDM5NjYsImV4cCI6MjA5NjYxOTk2Nn0.n0aWz-iNangkyzM5UNSpIAxajG_pmFZgLEL5ukvZCyE";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "INCOLLA_QUI_PROJECT_URL";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "INCOLLA_QUI_ANON_KEY";
 
 export const syncConfigured =
   SUPABASE_URL.startsWith("http") && !SUPABASE_KEY.startsWith("INCOLLA");
@@ -19,17 +19,90 @@ export const supabase = syncConfigured
     })
   : null;
 
-// Garantisce una sessione: se non esiste, crea un utente ANONIMO (nessun dato personale)
-export async function ensureSession() {
+// ---- AUTENTICAZIONE EMAIL ----
+
+// Sessione corrente (null se non loggato)
+export async function getSession() {
   if (!supabase) return null;
   const { data: { session } } = await supabase.auth.getSession();
-  if (session) return session.user;
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) { console.error("Auth anonima fallita:", error.message); return null; }
-  return data.user;
+  return session || null;
+}
+export async function getCurrentUser() {
+  if (!supabase) return null;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user || null;
+}
+// Alias dal metadata utente
+export function aliasOf(user) {
+  return user?.user_metadata?.alias || (user?.email ? user.email.split("@")[0] : "");
 }
 
-// Scarica i dati remoti per l'utente corrente
+// Registrazione: email + password + alias. Invia email di conferma.
+export async function signUp(email, password, alias) {
+  if (!supabase) return { error: "Sync non configurata." };
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+    options: {
+      data: { alias: (alias || "").trim().slice(0, 40) },
+      emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+    },
+  });
+  if (error) return { error: traduci(error.message) };
+  // Se la conferma email è attiva, non c'è ancora sessione finché non conferma.
+  const needsConfirm = !data.session;
+  return { user: data.user, needsConfirm };
+}
+
+export async function signIn(email, password) {
+  if (!supabase) return { error: "Sync non configurata." };
+  const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  if (error) return { error: traduci(error.message) };
+  return { user: data.user, session: data.session };
+}
+
+export async function signOut() {
+  if (!supabase) return;
+  await supabase.auth.signOut();
+}
+
+export async function resetPassword(email) {
+  if (!supabase) return { error: "Sync non configurata." };
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+  });
+  if (error) return { error: traduci(error.message) };
+  return { ok: true };
+}
+
+// Aggiorna la password (usato dopo il link di recupero)
+export async function updatePassword(newPassword) {
+  if (!supabase) return { error: "Sync non configurata." };
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) return { error: traduci(error.message) };
+  return { ok: true };
+}
+
+// Reagisce ai cambi di stato auth (login, logout, recovery)
+export function onAuthChange(cb) {
+  if (!supabase) return () => {};
+  const { data } = supabase.auth.onAuthStateChange((event, session) => cb(event, session));
+  return () => data.subscription.unsubscribe();
+}
+
+// Messaggi d'errore in italiano
+function traduci(msg) {
+  const m = (msg || "").toLowerCase();
+  if (m.includes("invalid login")) return "Email o password non corretti.";
+  if (m.includes("email not confirmed")) return "Devi prima confermare l'email: controlla la posta (anche lo spam).";
+  if (m.includes("already registered") || m.includes("already been registered")) return "Esiste già un account con questa email. Prova ad accedere.";
+  if (m.includes("password should be at least")) return "La password deve avere almeno 6 caratteri.";
+  if (m.includes("unable to validate email") || m.includes("invalid email")) return "Indirizzo email non valido.";
+  if (m.includes("rate limit") || m.includes("too many")) return "Troppi tentativi, riprova tra poco.";
+  return msg;
+}
+
+// ---- DATI: lettura e scrittura per l'utente corrente ----
 export async function pullRemote() {
   if (!supabase) return null;
   const { data: { user } } = await supabase.auth.getUser();
@@ -40,7 +113,6 @@ export async function pullRemote() {
   return data ? { payload: data.payload, updatedAt: data.updated_at } : null;
 }
 
-// Carica i dati (upsert) per l'utente corrente
 export async function pushRemote(payload) {
   if (!supabase) return false;
   const { data: { user } } = await supabase.auth.getUser();
@@ -52,29 +124,10 @@ export async function pushRemote(payload) {
   return true;
 }
 
-// ---- Collegamento multi-dispositivo tramite "codice di collegamento" ----
-// Il codice è la sessione (refresh token) serializzata: incollandolo su un altro
-// dispositivo, questo assume la stessa identità anonima e vede gli stessi dati.
-export async function exportLinkCode() {
-  if (!supabase) return null;
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return null;
-  const payload = { at: session.access_token, rt: session.refresh_token };
-  return btoa(JSON.stringify(payload));
-}
-
-export async function importLinkCode(code) {
-  if (!supabase) return false;
-  try {
-    const { at, rt } = JSON.parse(atob(code.trim()));
-    const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
-    if (error) { console.error("link:", error.message); return false; }
-    return true;
-  } catch (e) { console.error("codice non valido", e); return false; }
-}
-
+// ---- ID utente corrente ----
 export async function getUserId() {
   if (!supabase) return null;
   const { data: { user } } = await supabase.auth.getUser();
   return user?.id || null;
 }
+
