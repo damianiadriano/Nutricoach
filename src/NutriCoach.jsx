@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, Component } from "react";
-import { syncConfigured, ensureSession, pullRemote, pushRemote, exportLinkCode, importLinkCode, getUserId } from "./sync.js";
+import { syncConfigured, getSession, aliasOf, signUp, signIn, signOut, resetPassword, updatePassword, onAuthChange, pullRemote, pushRemote } from "./sync.js";
 import { estimateFromText, estimateFromPhoto, generateMenu } from "./estimate.js";
 
 /* ============ DATABASE ALIMENTI BASE ============ */
@@ -274,6 +274,11 @@ function AppInner(){
   const [customFoods,setCustomFoods]=useState({}); // {nome: {p,c,f,kcal,label,unit?}}
   const [theme,setTheme]=useState(()=>{ try{return localStorage.getItem("nc-theme")||"midnight";}catch(e){return "midnight";} });
   useEffect(()=>{ applyTheme(theme); try{localStorage.setItem("nc-theme",theme);}catch(e){} },[theme]);
+  // ---- Autenticazione ----
+  const [authUser,setAuthUser]=useState(null);     // utente loggato (o null)
+  const [authReady,setAuthReady]=useState(!syncConfigured); // se sync off, l'app parte subito
+  const [recoveryMode,setRecoveryMode]=useState(false); // true quando arriva da link reset password
+  const [welcome,setWelcome]=useState(null); // alias da mostrare nel benvenuto
   const [wInput,setWInput]=useState("");
   const [syncState,setSyncState]=useState({status:"off",last:null}); // off|connecting|synced|error|saving
   const pushTimer=useRef(null);
@@ -294,34 +299,54 @@ function AppInner(){
 
   // helper: applica un payload a tutti gli stati
   const applyPayload=(d)=>{ if(!d)return; setDays(d.days||{}); setPlans(d.plans||[]); setWeights(d.weights||{}); setCustomFoods(d.customFoods||{}); };
+  const blankPayload=()=>{ setDays({}); setPlans([]); setWeights({}); setCustomFoods({}); };
 
-  // 1) carica subito da localStorage (offline-first), poi confronta col cloud: vince il più recente
-  useEffect(()=>{
+  // Carica i dati per l'utente loggato (cloud, con fallback al locale dello stesso account)
+  const loadForUser=async(uid)=>{
+    setSyncState({status:"connecting",last:null});
+    const remote=await pullRemote();
+    const lsKey="tracker-v4-"+uid;
     let localPayload=null;
-    try{const raw=localStorage.getItem("tracker-v4");if(raw){localPayload=JSON.parse(raw);applyPayload(localPayload);}}catch(e){}
-    (async()=>{
-      if(syncConfigured){
-        setSyncState({status:"connecting",last:null});
-        const user=await ensureSession();
-        if(user){
-          const remote=await pullRemote();
-          const localTs=parseInt(localStorage.getItem("tracker-v4-ts")||"0");
-          const remoteTs=remote?.updatedAt?new Date(remote.updatedAt).getTime():0;
-          if(remote&&remote.payload&&remoteTs>=localTs){
-            // il cloud è pari o più recente → applicalo
-            applyPayload(remote.payload);
-            try{localStorage.setItem("tracker-v4",JSON.stringify(remote.payload));localStorage.setItem("tracker-v4-ts",String(remoteTs));}catch(e){}
-          }else if(localPayload&&localTs>remoteTs){
-            // il locale è più recente (es. modifiche offline) → proteggilo e spingilo al cloud
-            pushRemote(localPayload);
-          }
-          setSyncState({status:"synced",last:Date.now()});
-        }else{
-          setSyncState({status:"error",last:null});
-        }
-      }
+    try{const raw=localStorage.getItem(lsKey);if(raw)localPayload=JSON.parse(raw);}catch(e){}
+    const localTs=parseInt(localStorage.getItem(lsKey+"-ts")||"0");
+    const remoteTs=remote?.updatedAt?new Date(remote.updatedAt).getTime():0;
+    if(remote&&remote.payload&&remoteTs>=localTs){
+      applyPayload(remote.payload);
+      try{localStorage.setItem(lsKey,JSON.stringify(remote.payload));localStorage.setItem(lsKey+"-ts",String(remoteTs));}catch(e){}
+    }else if(localPayload){
+      applyPayload(localPayload);
+      pushRemote(localPayload);
+    }else{
+      blankPayload();
+    }
+    setSyncState({status:"synced",last:Date.now()});
+    setLoaded(true);
+  };
+
+  // 1) avvio: se sync OFF carica da localStorage; se ON aspetta il login
+  useEffect(()=>{
+    if(!syncConfigured){
+      try{const raw=localStorage.getItem("tracker-v4");if(raw)applyPayload(JSON.parse(raw));}catch(e){}
       setLoaded(true);
+      return;
+    }
+    (async()=>{
+      // intercetta il ritorno dal link di recupero password
+      if(typeof window!=="undefined" && window.location.hash.includes("type=recovery")) setRecoveryMode(true);
+      const session=await getSession();
+      const user=session?.user||null;
+      setAuthUser(user);
+      if(user){ await loadForUser(user.id); }
+      setAuthReady(true);
     })();
+    const off=onAuthChange((event,session)=>{
+      if(event==="PASSWORD_RECOVERY"){ setRecoveryMode(true); return; }
+      const u=session?.user||null;
+      setAuthUser(u);
+      if(u){ loadForUser(u.id); }
+      if(event==="SIGNED_OUT"){ blankPayload(); setLoaded(false); }
+    });
+    return off;
   },[]);
 
   // 2) salva su localStorage sempre + push al cloud con debounce
@@ -329,8 +354,9 @@ function AppInner(){
     if(!loaded)return;
     const payload={days,plans,weights,customFoods};
     latestPayload.current=payload;
-    try{localStorage.setItem("tracker-v4",JSON.stringify(payload));localStorage.setItem("tracker-v4-ts",String(Date.now()));}catch(e){console.error(e);}
-    if(syncConfigured){
+    const lsKey = syncConfigured && authUser ? "tracker-v4-"+authUser.id : "tracker-v4";
+    try{localStorage.setItem(lsKey,JSON.stringify(payload));localStorage.setItem(lsKey+"-ts",String(Date.now()));}catch(e){console.error(e);}
+    if(syncConfigured && authUser){
       if(pushTimer.current)clearTimeout(pushTimer.current);
       setSyncState(s=>({...s,status:"saving"}));
       pushTimer.current=setTimeout(async()=>{
@@ -338,7 +364,10 @@ function AppInner(){
         setSyncState({status:ok?"synced":"error",last:ok?Date.now():null});
       },1200);
     }
-  },[days,plans,weights,customFoods,loaded]);
+  },[days,plans,weights,customFoods,loaded,authUser]);
+
+  // logout
+  const doLogout=async()=>{ await signOut(); setAuthUser(null); setLoaded(false); blankPayload(); setTab("oggi"); };
 
   const activePlan = planForDate(plans, selectedDate);
   const curDay=days[selectedDate]||{dayType:"normale",logs:{},workouts:[]};
@@ -465,6 +494,11 @@ function AppInner(){
   };
   const addAllMenu=(data)=>{ Object.entries(data.meals||{}).forEach(([k,m])=>addMenuMeal(k,m)); setMenu(null); setTab("oggi"); };
 
+  // ---- Gate autenticazione ----
+  if(syncConfigured && !authReady) return <div style={{background:"var(--bg)",minHeight:"100vh",color:"var(--text-dim)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif"}}>Caricamento…</div>;
+  if(syncConfigured && recoveryMode) return <ResetPasswordScreen theme={theme} onDone={()=>{setRecoveryMode(false); if(typeof window!=="undefined"){window.location.hash="";}}}/>;
+  if(syncConfigured && !authUser) return <AuthScreen theme={theme} setTheme={setTheme} onWelcome={a=>setWelcome(a)}/>;
+
   if(!loaded)return <div style={{background:"var(--bg)",minHeight:"100vh",color:"var(--text-dim)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif"}}>Caricamento…</div>;
 
   return(
@@ -473,7 +507,7 @@ function AppInner(){
         <div style={{maxWidth:720,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}>
             <img src="/icon-192.png" alt="" style={{width:36,height:36,borderRadius:10}}/>
-            <div><h1 style={{margin:0,fontSize:19,fontWeight:700,color:"var(--text-strong)"}}>NutriCoach</h1><p style={{margin:0,fontSize:12,color:"var(--text-dim)"}}>Piano su misura · diario · allenamenti · storico versioni</p></div>
+            <div><h1 style={{margin:0,fontSize:19,fontWeight:700,color:"var(--text-strong)"}}>NutriCoach</h1><p style={{margin:0,fontSize:12,color:"var(--text-dim)"}}>{authUser?`Ciao, ${aliasOf(authUser)} 👋`:"Piano su misura · diario · allenamenti · storico versioni"}</p></div>
             {syncConfigured&&<div onClick={()=>setTab("sync")} style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:"var(--text-dim)"}}><span style={{width:8,height:8,borderRadius:"50%",background:{synced:"#34D399",saving:"#FBBF24",connecting:"var(--accent-light)",error:"#F87171",off:"var(--muted)"}[syncState.status]}}/>{({synced:"Sincronizzato",saving:"Salvataggio…",connecting:"Connessione…",error:"Offline",off:""})[syncState.status]}</div>}
           </div>
           <div style={{display:"flex",gap:0,marginTop:14,overflowX:"auto"}}>
@@ -485,6 +519,12 @@ function AppInner(){
       </div>
 
       <div style={{maxWidth:720,margin:"0 auto",padding:"18px 14px 60px"}}>
+        {welcome&&(
+          <div onClick={()=>setWelcome(null)} style={{background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",borderRadius:12,padding:"14px 16px",marginBottom:14,color:"#fff",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+            <span style={{fontSize:22}}>🎉</span>
+            <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700}}>Bentornato, {welcome}!</div><div style={{fontSize:11,opacity:0.9}}>I tuoi dati sono sincronizzati. Tocca per chiudere.</div></div>
+          </div>
+        )}
 
         {(tab==="oggi"||tab==="allenamenti")&&(
           <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
@@ -572,7 +612,7 @@ function AppInner(){
         </>)}
 
         {/* ===== SYNC ===== */}
-        {tab==="sync"&&<SyncView syncState={syncState} setSyncState={setSyncState} applyPayload={applyPayload} theme={theme} setTheme={setTheme}/>}
+        {tab==="sync"&&<SyncView syncState={syncState} theme={theme} setTheme={setTheme} authUser={authUser} onLogout={doLogout}/>}
 
         {/* ===== COACH ===== */}
         {tab==="coach"&&<CoachView days={days} plans={plans} weights={weights} setTab={setTab}/>}
@@ -813,15 +853,7 @@ function AppInner(){
 }
 
 /* ============ SYNC VIEW ============ */
-function SyncView({syncState,applyPayload,theme,setTheme}){
-  const [uid,setUid]=useState(null);
-  const [code,setCode]=useState("");
-  const [importCode,setImportCode]=useState("");
-  const [msg,setMsg]=useState(null);
-  const [busy,setBusy]=useState(false);
-
-  useEffect(()=>{getUserId().then(setUid);},[syncState]);
-
+function SyncView({syncState,theme,setTheme,authUser,onLogout}){
   const themeSelector=(
     <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
       <h3 style={{margin:"0 0 4px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>🎨 Tema dell'app</h3>
@@ -847,76 +879,42 @@ function SyncView({syncState,applyPayload,theme,setTheme}){
     </div>
   );
 
+  const statusInfo={synced:["#34D399","✅ Sincronizzato"],saving:["#FBBF24","💾 Salvataggio…"],connecting:["var(--accent-light)","🔄 Connessione…"],error:["#F87171","⚠️ Offline — i dati restano salvati qui e si sincronizzano al ritorno della rete"],off:["var(--muted)","—"]}[syncState.status]||["var(--muted)","—"];
+
   if(!syncConfigured){
-    return(
-      <div>
-        {themeSelector}
-        <div style={{background:"var(--surface)",borderRadius:12,padding:20,border:"1px solid var(--border)"}}>
-          <div style={{fontSize:30,marginBottom:10,textAlign:"center"}}>☁️</div>
-          <h3 style={{margin:"0 0 8px",fontSize:15,color:"var(--text-strong)",textAlign:"center"}}>Sincronizzazione non configurata</h3>
-          <p style={{margin:0,fontSize:13,color:"var(--text-soft)",lineHeight:1.6}}>L'app sta salvando solo su questo dispositivo. Per sincronizzare i dati ovunque in modo anonimo, segui <strong style={{color:"var(--accent-light)"}}>GUIDA-SUPABASE.md</strong>: crea un progetto Supabase gratuito e incolla due chiavi. Nessun dato personale verrà mai salvato.</p>
-        </div>
+    return(<div>{themeSelector}
+      <div style={{background:"var(--surface)",borderRadius:12,padding:20,border:"1px solid var(--border)"}}>
+        <div style={{fontSize:30,marginBottom:10,textAlign:"center"}}>☁️</div>
+        <h3 style={{margin:"0 0 8px",fontSize:15,color:"var(--text-strong)",textAlign:"center"}}>Account non configurato</h3>
+        <p style={{margin:0,fontSize:13,color:"var(--text-soft)",lineHeight:1.6}}>L'app salva solo su questo dispositivo. Per avere un account email con sincronizzazione ovunque, configura Supabase (vedi <strong style={{color:"var(--accent-light)"}}>GUIDA-ACCOUNT.md</strong>).</p>
       </div>
-    );
+    </div>);
   }
 
-  const doExport=async()=>{ setBusy(true); const c=await exportLinkCode(); setCode(c||""); setMsg(c?null:{t:"err",x:"Impossibile generare il codice."}); setBusy(false); };
-  const doImport=async()=>{
-    if(!importCode.trim())return;
-    setBusy(true);
-    const ok=await importLinkCode(importCode);
-    if(ok){
-      const remote=await pullRemote();
-      if(remote?.payload){ applyPayload(remote.payload); try{localStorage.setItem("tracker-v4",JSON.stringify(remote.payload));}catch(e){} }
-      setMsg({t:"ok",x:"Dispositivo collegato! Dati sincronizzati."});
-      setImportCode("");
-    }else setMsg({t:"err",x:"Codice non valido o scaduto. Rigeneralo sul primo dispositivo."});
-    setBusy(false);
-  };
-  const copy=()=>{ if(code){navigator.clipboard?.writeText(code); setMsg({t:"ok",x:"Codice copiato negli appunti."});} };
+  return(<div>
+    {themeSelector}
 
-  const statusInfo={synced:["#34D399","✅ Tutto sincronizzato"],saving:["#FBBF24","💾 Salvataggio in corso…"],connecting:["var(--accent-light)","🔄 Connessione…"],error:["#F87171","⚠️ Offline — i dati restano salvati qui e si sincronizzeranno al ritorno della connessione"],off:["var(--muted)","—"]}[syncState.status];
-
-  return(
-    <div>
-      {themeSelector}
-      <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <span style={{width:10,height:10,borderRadius:"50%",background:statusInfo[0]}}/>
-          <span style={{fontSize:14,fontWeight:700,color:statusInfo[0]}}>{statusInfo[1]}</span>
+    {/* Profilo */}
+    <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
+      <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>👤 Il tuo profilo</h3>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+        <div style={{width:46,height:46,borderRadius:"50%",background:"linear-gradient(135deg,var(--accent),var(--accent-2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,color:"#fff"}}>{(aliasOf(authUser)||"?").slice(0,1).toUpperCase()}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:"var(--text-strong)"}}>{aliasOf(authUser)}</div>
+          <div style={{fontSize:11,color:"var(--text-dim)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{authUser?.email}</div>
         </div>
-        {syncState.last&&<div style={{fontSize:11,color:"var(--text-dim)"}}>Ultimo salvataggio cloud: {new Date(syncState.last).toLocaleTimeString("it-IT")}</div>}
       </div>
-
-      <div style={{background:"#0F2A1E",borderRadius:12,padding:16,marginBottom:14,border:"1px solid #059669"}}>
-        <div style={{fontSize:13,fontWeight:700,color:"#6EE7B7",marginBottom:6}}>🔒 Anonimo per design</div>
-        <p style={{margin:0,fontSize:12,color:"#A7F3D0",lineHeight:1.6}}>La tua identità è un codice casuale, senza email né nome. Nel database non c'è nulla che ti identifichi: solo i numeri dei tuoi pasti, peso e allenamenti, leggibili unicamente dalla tua identità.</p>
-        {uid&&<div style={{fontSize:10,color:"#10B981",marginTop:8,fontFamily:"monospace",wordBreak:"break-all",opacity:0.6}}>ID anonimo: {uid}</div>}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,fontSize:12,color:"var(--text-soft)"}}>
+        <span style={{width:9,height:9,borderRadius:"50%",background:statusInfo[0]}}/>{statusInfo[1]}
       </div>
-
-      {/* Collega un altro dispositivo */}
-      <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
-        <h3 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>📲 Usa su un altro dispositivo</h3>
-        <p style={{margin:"0 0 12px",fontSize:12,color:"var(--text-dim)",lineHeight:1.5}}>Genera un codice qui (dispositivo principale) e incollalo sull'altro per allinearli alla stessa identità anonima.</p>
-        <button onClick={doExport} disabled={busy} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13,marginBottom:code?10:0}}>Genera codice di collegamento</button>
-        {code&&(
-          <div style={{background:"var(--bg)",borderRadius:8,padding:10,border:"1px solid var(--border)"}}>
-            <div style={{fontSize:11,color:"var(--text-soft)",wordBreak:"break-all",fontFamily:"monospace",marginBottom:8,maxHeight:80,overflow:"auto"}}>{code}</div>
-            <button onClick={copy} style={{padding:"6px 12px",borderRadius:6,border:"1px solid var(--border)",background:"transparent",color:"var(--accent-light)",cursor:"pointer",fontSize:12}}>📋 Copia</button>
-            <div style={{fontSize:10,color:"#FBBF24",marginTop:8}}>⚠️ Chiunque abbia questo codice accede ai tuoi dati. Non condividerlo.</div>
-          </div>
-        )}
-      </div>
-
-      <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
-        <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>📥 Collega questo dispositivo</h3>
-        <textarea value={importCode} onChange={e=>setImportCode(e.target.value)} placeholder="Incolla qui il codice generato sull'altro dispositivo" rows={3} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:12,outline:"none",boxSizing:"border-box",resize:"vertical",fontFamily:"monospace"}}/>
-        <button onClick={doImport} disabled={busy||!importCode.trim()} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:importCode.trim()?"linear-gradient(135deg,#059669,#047857)":"var(--border)",color:"#fff",fontWeight:700,cursor:importCode.trim()?"pointer":"default",fontSize:13,marginTop:10}}>Collega e sincronizza</button>
-      </div>
-
-      {msg&&<div style={{background:msg.t==="ok"?"#0F2A1E":"#3B1212",borderRadius:8,padding:"10px 14px",fontSize:12,color:msg.t==="ok"?"#6EE7B7":"#FCA5A5",border:`1px solid ${msg.t==="ok"?"#059669":"#7F1D1D"}`}}>{msg.x}</div>}
+      <button onClick={onLogout} style={{width:"100%",padding:"11px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"#F87171",fontWeight:700,cursor:"pointer",fontSize:13}}>Esci / Cambia profilo</button>
     </div>
-  );
+
+    <div style={{background:"#0F2A1E",borderRadius:12,padding:16,border:"1px solid #059669"}}>
+      <div style={{fontSize:13,fontWeight:700,color:"#6EE7B7",marginBottom:6}}>🔒 Dati al sicuro</div>
+      <p style={{margin:0,fontSize:12,color:"#A7F3D0",lineHeight:1.6}}>I tuoi dati sono protetti dal tuo account e accessibili da qualsiasi dispositivo facendo login con la stessa email. Più persone possono usare l'app sullo stesso telefono: basta uscire e accedere con un altro account.</p>
+    </div>
+  </div>);
 }
 
 
@@ -1409,6 +1407,126 @@ function ProductRow({ prod, onAdd }) {
         <span style={{ fontSize:12, color:"var(--accent-light)", fontWeight:700 }}>{Math.round(prod.kcal100*fct)} kcal</span>
         <span style={{ fontSize:11, color:"var(--text-dim)" }}>P{(prod.p100*fct).toFixed(1)} C{(prod.c100*fct).toFixed(1)} F{(prod.f100*fct).toFixed(1)}</span>
         <button onClick={()=>onAdd(grams)} style={{ marginLeft:"auto", padding:"7px 14px", borderRadius:6, border:"none", background:"linear-gradient(135deg,var(--accent),var(--accent-deep))", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:12 }}>+ Aggiungi</button>
+      </div>
+    </div>
+  );
+}
+
+/* ============ SCHERMATA LOGIN / REGISTRAZIONE ============ */
+function AuthScreen({theme,setTheme,onWelcome}){
+  const [mode,setMode]=useState("login"); // login | signup | forgot
+  const [email,setEmail]=useState("");
+  const [pw,setPw]=useState("");
+  const [alias,setAlias]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState(null); // {t:'err'|'ok', x}
+  const [info,setInfo]=useState(null);
+
+  const inp={width:"100%",padding:"12px 14px",borderRadius:10,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:15,outline:"none",boxSizing:"border-box",marginBottom:10};
+
+  const submit=async()=>{
+    setMsg(null); setInfo(null);
+    if(!email.trim()||(mode!=="forgot"&&!pw)){ setMsg({t:"err",x:"Compila tutti i campi."}); return; }
+    if(mode==="signup"&&!alias.trim()){ setMsg({t:"err",x:"Scegli un nome da mostrare."}); return; }
+    setBusy(true);
+    if(mode==="signup"){
+      const r=await signUp(email,pw,alias);
+      setBusy(false);
+      if(r.error){ setMsg({t:"err",x:r.error}); return; }
+      if(r.needsConfirm){ setInfo("Ti abbiamo inviato un'email di conferma. Aprila e tocca il link, poi torna qui e accedi."); setMode("login"); setPw(""); return; }
+      onWelcome(alias.trim());
+    } else if(mode==="login"){
+      const r=await signIn(email,pw);
+      setBusy(false);
+      if(r.error){ setMsg({t:"err",x:r.error}); return; }
+      onWelcome(aliasOf(r.user));
+    } else { // forgot
+      const r=await resetPassword(email);
+      setBusy(false);
+      if(r.error){ setMsg({t:"err",x:r.error}); return; }
+      setInfo("Se l'email è registrata, riceverai un link per reimpostare la password. Controlla anche lo spam.");
+      setMode("login");
+    }
+  };
+
+  return(
+    <div style={{background:"var(--bg)",minHeight:"100vh",color:"var(--text)",fontFamily:"'Inter','Segoe UI',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
+      <div style={{width:"100%",maxWidth:380}}>
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <img src="/icon-192.png" alt="" style={{width:64,height:64,borderRadius:16,marginBottom:12}}/>
+          <h1 style={{margin:0,fontSize:24,fontWeight:800,color:"var(--text-strong)",letterSpacing:"-0.5px"}}>NutriCoach</h1>
+          <p style={{margin:"4px 0 0",fontSize:13,color:"var(--text-dim)"}}>
+            {mode==="login"?"Accedi al tuo account":mode==="signup"?"Crea il tuo account":"Recupera la password"}
+          </p>
+        </div>
+
+        <div style={{background:"var(--surface)",borderRadius:16,padding:20,border:"1px solid var(--border)"}}>
+          {mode==="signup"&&(
+            <input value={alias} onChange={e=>setAlias(e.target.value)} placeholder="Nome da mostrare (es. Adriano)" style={inp} maxLength={40}/>
+          )}
+          <input value={email} onChange={e=>setEmail(e.target.value)} type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" placeholder="Email" style={inp}/>
+          {mode!=="forgot"&&(
+            <input value={pw} onChange={e=>setPw(e.target.value)} type="password" placeholder="Password" style={inp} onKeyDown={e=>{if(e.key==="Enter")submit();}}/>
+          )}
+
+          {msg&&<div style={{background:"#3B1212",border:"1px solid #7F1D1D",borderRadius:8,padding:"9px 12px",fontSize:12,color:"#FCA5A5",marginBottom:10}}>{msg.x}</div>}
+          {info&&<div style={{background:"#0F2A1E",border:"1px solid #059669",borderRadius:8,padding:"9px 12px",fontSize:12,color:"#A7F3D0",marginBottom:10,lineHeight:1.5}}>{info}</div>}
+
+          <button onClick={submit} disabled={busy} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer",marginBottom:6}}>
+            {busy?"…":mode==="login"?"Accedi":mode==="signup"?"Crea account":"Invia link di recupero"}
+          </button>
+
+          {mode==="login"&&(
+            <div style={{textAlign:"center",marginTop:6}}>
+              <button onClick={()=>{setMode("forgot");setMsg(null);setInfo(null);}} style={{background:"none",border:"none",color:"var(--text-dim)",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>Password dimenticata?</button>
+            </div>
+          )}
+        </div>
+
+        <div style={{textAlign:"center",marginTop:18,fontSize:13,color:"var(--text-soft)"}}>
+          {mode==="login"&&<>Non hai un account? <button onClick={()=>{setMode("signup");setMsg(null);setInfo(null);}} style={{background:"none",border:"none",color:"var(--accent-light)",fontWeight:700,cursor:"pointer",fontSize:13}}>Registrati</button></>}
+          {mode==="signup"&&<>Hai già un account? <button onClick={()=>{setMode("login");setMsg(null);setInfo(null);}} style={{background:"none",border:"none",color:"var(--accent-light)",fontWeight:700,cursor:"pointer",fontSize:13}}>Accedi</button></>}
+          {mode==="forgot"&&<button onClick={()=>{setMode("login");setMsg(null);setInfo(null);}} style={{background:"none",border:"none",color:"var(--accent-light)",fontWeight:700,cursor:"pointer",fontSize:13}}>← Torna all'accesso</button>}
+        </div>
+
+        <div style={{display:"flex",justifyContent:"center",gap:8,marginTop:24}}>
+          {[["midnight","🌙"],["fresh","☀️"]].map(([id,ic])=>(
+            <button key={id} onClick={()=>setTheme(id)} style={{padding:"6px 12px",borderRadius:8,border:theme===id?"1px solid var(--accent)":"1px solid var(--border)",background:"transparent",color:theme===id?"var(--accent)":"var(--text-dim)",cursor:"pointer",fontSize:12}}>{ic} {id==="midnight"?"Scuro":"Chiaro"}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============ SCHERMATA RESET PASSWORD (dopo link email) ============ */
+function ResetPasswordScreen({theme,onDone}){
+  const [pw,setPw]=useState("");
+  const [pw2,setPw2]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState(null);
+  const inp={width:"100%",padding:"12px 14px",borderRadius:10,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:15,outline:"none",boxSizing:"border-box",marginBottom:10};
+  const submit=async()=>{
+    if(pw.length<6){ setMsg({t:"err",x:"La password deve avere almeno 6 caratteri."}); return; }
+    if(pw!==pw2){ setMsg({t:"err",x:"Le due password non coincidono."}); return; }
+    setBusy(true);
+    const r=await updatePassword(pw);
+    setBusy(false);
+    if(r.error){ setMsg({t:"err",x:r.error}); return; }
+    setMsg({t:"ok",x:"Password aggiornata! Ora puoi usare l'app."});
+    setTimeout(onDone,1400);
+  };
+  return(
+    <div style={{background:"var(--bg)",minHeight:"100vh",color:"var(--text)",fontFamily:"'Inter','Segoe UI',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 18px"}}>
+      <div style={{width:"100%",maxWidth:380}}>
+        <h1 style={{textAlign:"center",fontSize:20,fontWeight:800,color:"var(--text-strong)",marginBottom:6}}>Nuova password</h1>
+        <p style={{textAlign:"center",fontSize:13,color:"var(--text-dim)",marginBottom:20}}>Imposta una nuova password per il tuo account.</p>
+        <div style={{background:"var(--surface)",borderRadius:16,padding:20,border:"1px solid var(--border)"}}>
+          <input value={pw} onChange={e=>setPw(e.target.value)} type="password" placeholder="Nuova password" style={inp}/>
+          <input value={pw2} onChange={e=>setPw2(e.target.value)} type="password" placeholder="Ripeti la password" style={inp} onKeyDown={e=>{if(e.key==="Enter")submit();}}/>
+          {msg&&<div style={{background:msg.t==="ok"?"#0F2A1E":"#3B1212",border:`1px solid ${msg.t==="ok"?"#059669":"#7F1D1D"}`,borderRadius:8,padding:"9px 12px",fontSize:12,color:msg.t==="ok"?"#A7F3D0":"#FCA5A5",marginBottom:10}}>{msg.x}</div>}
+          <button onClick={submit} disabled={busy} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>{busy?"…":"Salva password"}</button>
+        </div>
       </div>
     </div>
   );
