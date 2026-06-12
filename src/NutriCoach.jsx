@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, Component } from "react";
-import { syncConfigured, getSession, aliasOf, signUp, signIn, signInWithGoogle, signOut, resetPassword, updatePassword, onAuthChange, pullRemote, pushRemote } from "./sync.js";
+import { syncConfigured, getSession, aliasOf, signUp, signIn, signInWithGoogle, signOut, resetPassword, updatePassword, updateAlias, onAuthChange, pullRemote, pushRemote } from "./sync.js";
 import { estimateFromText, estimateFromPhoto, generateMenu } from "./estimate.js";
 import BarcodeScanner from "./BarcodeScanner.jsx";
 
@@ -918,20 +918,7 @@ function SyncView({syncState,theme,setTheme,authUser,onLogout}){
     {themeSelector}
 
     {/* Profilo */}
-    <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
-      <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>👤 Il tuo profilo</h3>
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-        <div style={{width:46,height:46,borderRadius:"50%",background:"linear-gradient(135deg,var(--accent),var(--accent-2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,color:"#fff"}}>{(aliasOf(authUser)||"?").slice(0,1).toUpperCase()}</div>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:15,fontWeight:700,color:"var(--text-strong)"}}>{aliasOf(authUser)}</div>
-          <div style={{fontSize:11,color:"var(--text-dim)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{authUser?.email}</div>
-        </div>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,fontSize:12,color:"var(--text-soft)"}}>
-        <span style={{width:9,height:9,borderRadius:"50%",background:statusInfo[0]}}/>{statusInfo[1]}
-      </div>
-      <button onClick={onLogout} style={{width:"100%",padding:"11px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"#F87171",fontWeight:700,cursor:"pointer",fontSize:13}}>Esci / Cambia profilo</button>
-    </div>
+    <AliasEditor authUser={authUser} statusInfo={statusInfo} onLogout={onLogout}/>
 
     <div style={{background:"#0F2A1E",borderRadius:12,padding:16,border:"1px solid #059669"}}>
       <div style={{fontSize:13,fontWeight:700,color:"#6EE7B7",marginBottom:6}}>🔒 Dati al sicuro</div>
@@ -1435,7 +1422,62 @@ function ProductRow({ prod, onAdd }) {
   );
 }
 
-/* ============ STORICO CON TOGGLE LISTA/GRAFICO ============ */
+/* ============ ALIAS EDITOR ============ */
+function AliasEditor({authUser,statusInfo,onLogout}){
+  const [editing,setEditing]=useState(false);
+  const [val,setVal]=useState(aliasOf(authUser));
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState(null);
+
+  const currentAlias=aliasOf(authUser);
+
+  const save=async()=>{
+    const trimmed=val.trim();
+    if(!trimmed){setMsg({t:"err",x:"Il nome non può essere vuoto."});return;}
+    if(trimmed===currentAlias){setEditing(false);return;}
+    setBusy(true);setMsg(null);
+    const r=await updateAlias(trimmed);
+    setBusy(false);
+    if(r.error){setMsg({t:"err",x:r.error});return;}
+    setMsg({t:"ok",x:"Nome aggiornato!"});
+    setEditing(false);
+    // il cambio si vedrà all'header al prossimo refresh auth — forziamo ricaricando la pagina dopo 800ms
+    setTimeout(()=>window.location.reload(),900);
+  };
+
+  return(
+    <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
+      <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>👤 Il tuo profilo</h3>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+        <div style={{width:46,height:46,borderRadius:"50%",background:"linear-gradient(135deg,var(--accent),var(--accent-2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,color:"#fff",flexShrink:0}}>{(currentAlias||"?").slice(0,1).toUpperCase()}</div>
+        <div style={{flex:1,minWidth:0}}>
+          {editing?(
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <input value={val} onChange={e=>setVal(e.target.value)} maxLength={40} autoFocus
+                onKeyDown={e=>{if(e.key==="Enter")save();if(e.key==="Escape"){setEditing(false);setVal(currentAlias);}}}
+                style={{flex:1,padding:"7px 10px",borderRadius:8,border:"1px solid var(--accent)",background:"var(--bg)",color:"var(--text)",fontSize:14,outline:"none"}}/>
+              <button onClick={save} disabled={busy} style={{padding:"7px 12px",borderRadius:8,border:"none",background:"var(--accent)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>{busy?"…":"Salva"}</button>
+              <button onClick={()=>{setEditing(false);setVal(currentAlias);setMsg(null);}} style={{padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--text-dim)",cursor:"pointer",fontSize:12}}>✕</button>
+            </div>
+          ):(
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{fontSize:15,fontWeight:700,color:"var(--text-strong)"}}>{currentAlias}</div>
+              <button onClick={()=>{setEditing(true);setVal(currentAlias);setMsg(null);}} style={{padding:"3px 9px",borderRadius:6,border:"1px solid var(--border)",background:"transparent",color:"var(--text-dim)",cursor:"pointer",fontSize:11}}>✏️ Modifica</button>
+            </div>
+          )}
+          <div style={{fontSize:11,color:"var(--text-dim)",marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{authUser?.email}</div>
+        </div>
+      </div>
+      {msg&&<div style={{background:msg.t==="ok"?"#0F2A1E":"#3B1212",border:`1px solid ${msg.t==="ok"?"#059669":"#7F1D1D"}`,borderRadius:8,padding:"8px 12px",fontSize:12,color:msg.t==="ok"?"#6EE7B7":"#FCA5A5",marginBottom:12}}>{msg.x}</div>}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,fontSize:12,color:"var(--text-soft)"}}>
+        <span style={{width:9,height:9,borderRadius:"50%",background:statusInfo[0]}}/>{statusInfo[1]}
+      </div>
+      <button onClick={onLogout} style={{width:"100%",padding:"11px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"#F87171",fontWeight:700,cursor:"pointer",fontSize:13}}>Esci / Cambia profilo</button>
+    </div>
+  );
+}
+
+
 function StoricoCon({days,plans,historyKeys,setSelectedDate,setTab,setOpenSlot,pct}){
   const [view,setView]=useState("lista"); // lista | grafico
   const sum2=items=>items.reduce((a,i)=>({kcal:a.kcal+i.kcal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{kcal:0,p:0,c:0,f:0});
