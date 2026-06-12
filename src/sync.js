@@ -66,6 +66,20 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
+// Login con Google (OAuth). In una PWA client-only, Supabase gestisce il callback
+// e riporta l'utente all'app già autenticato.
+export async function signInWithGoogle() {
+  if (!supabase) return { error: "Sync non configurata." };
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+    },
+  });
+  if (error) return { error: traduci(error.message) };
+  return { ok: true }; // il browser si reindirizza a Google da solo
+}
+
 export async function resetPassword(email) {
   if (!supabase) return { error: "Sync non configurata." };
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
