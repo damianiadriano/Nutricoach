@@ -153,3 +153,10 @@ export async function getUserId() {
   return user?.id || null;
 }
 
+
+// Restituisce il JWT della sessione corrente (per chiamare le API Vercel)
+export async function getJwt() {
+  if (!supabase) return null;
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || null;
+}
