@@ -6,8 +6,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw-push.js",
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg"],
+      injectManifest: { globPatterns: ["**/*.{js,css,html,svg,woff2}"] },
       manifest: {
         name: "NutriCoach",
         short_name: "NutriCoach",
@@ -23,9 +26,6 @@ export default defineConfig({
           { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }
         ]
       },
-      workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,woff2}"]
-      }
     })
   ]
 });
