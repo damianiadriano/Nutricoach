@@ -7,8 +7,8 @@
 import { createClient } from "@supabase/supabase-js";
 
 // 🔧 Incolla qui i due valori dal tuo progetto Supabase (vedi GUIDA-SUPABASE.md)
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://zuatjmrvvbawibtnszor.supabase.co";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp1YXRqbXJ2dmJhd2lidG5zem9yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNDM5NjYsImV4cCI6MjA5NjYxOTk2Nn0.n0aWz-iNangkyzM5UNSpIAxajG_pmFZgLEL5ukvZCyE";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "INCOLLA_QUI_PROJECT_URL";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "INCOLLA_QUI_ANON_KEY";
 
 export const syncConfigured =
   SUPABASE_URL.startsWith("http") && !SUPABASE_KEY.startsWith("INCOLLA");
