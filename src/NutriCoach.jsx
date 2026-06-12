@@ -524,7 +524,7 @@ function AppInner(){
             {syncConfigured&&<div onClick={()=>setTab("sync")} style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:"var(--text-dim)"}}><span style={{width:8,height:8,borderRadius:"50%",background:{synced:"#34D399",saving:"#FBBF24",connecting:"var(--accent-light)",error:"#F87171",off:"var(--muted)"}[syncState.status]}}/>{({synced:"Sincronizzato",saving:"Salvataggio…",connecting:"Connessione…",error:"Offline",off:""})[syncState.status]}</div>}
           </div>
           <div style={{display:"flex",gap:0,marginTop:14,overflowX:"auto"}}>
-            {[["oggi","📝 Diario"],["piano","🎯 Piano"],["allenamenti","🔥 Workout"],["peso","⚖️ Peso"],["coach","🧭 Coach"],["storico","📅 Storico"],["sync","☁️ Sync"]].map(([id,l])=>(
+            {[["oggi","📝 Diario"],["piano","🎯 Piano"],["allenamenti","🔥 Workout"],["peso","⚖️ Peso"],["coach","🧭 Coach"],["storico","📅 Storico"],["sync","⚙️ Profilo"]].map(([id,l])=>(
               <button key={id} onClick={()=>setTab(id)} style={{padding:"10px 14px",fontSize:13,fontWeight:600,border:"none",cursor:"pointer",background:"transparent",whiteSpace:"nowrap",color:tab===id?"var(--accent-light)":"var(--text-dim)",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent"}}>{l}</button>
             ))}
           </div>
