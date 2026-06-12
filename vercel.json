@@ -1,8 +1,16 @@
 {
   "crons": [
     {
-      "path": "/api/push-cron",
-      "schedule": "*/30 * * * *"
+      "path": "/api/push-cron?slot=breakfast",
+      "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/push-cron?slot=lunch",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/push-cron?slot=weigh",
+      "schedule": "30 5 * * 1"
     }
   ]
 }
