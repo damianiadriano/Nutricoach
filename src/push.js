@@ -6,7 +6,7 @@
 // ============================================================
 
 export const VAPID_PUBLIC = import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-  "BL8OhETYdZuQHIFtC2aCiMIl2_fu7Yh4xjekdpA3vMnHgzOvFhIHOvT8vD8bSCOX9ndl3TvqlCfxt6vHxb5kM8U";
+  "BEcVYvWR4P41cfdSiQfAXRErl37d4fitnitBI6UiFRK_BntO8MhfgR6lOzJ-LEwhkbTPst5J-uTbMfcEvnAodRk";
 
 // Controlla se le push sono supportate
 export function pushSupported() {
