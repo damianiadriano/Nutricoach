@@ -571,10 +571,10 @@ function AppInner(){
             {macroBar("Proteine",totals.p,target.p,"var(--accent)")}{macroBar("Carboidrati",totals.c,target.c,"#F59E0B")}{macroBar("Grassi",totals.f,target.f,"#10B981")}
             {burned>0&&<div style={{display:"flex",gap:10,marginTop:6,marginBottom:6}}><div style={{flex:1,background:"var(--bg)",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"var(--text-dim)"}}>🔥 BRUCIATE</div><div style={{fontSize:18,fontWeight:800,color:"#FB923C"}}>{burned} kcal</div></div><div style={{flex:1,background:"var(--bg)",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"var(--text-dim)"}}>⚖️ NETTO</div><div style={{fontSize:18,fontWeight:800,color:"#A78BFA"}}>{Math.round(netKcal)} kcal</div></div></div>}
             <div style={{marginTop:8,background:"var(--bg)",borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,borderLeft:`3px solid ${verdict.color}`}}><span style={{fontSize:20}}>{verdict.emoji}</span><span style={{fontSize:13,color:verdict.color,fontWeight:600}}>{verdict.txt}</span></div>
-            <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:12,color:"var(--text-dim)",flex:1}}>⚖️ Peso {weights[selectedDate]?`${weights[selectedDate]} kg`:"(non registrato)"}</span>
-              <input value={wInput} onChange={e=>setWInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveWeight();}} placeholder={weights[selectedDate]?"aggiorna":"es. 64.5"} inputMode="decimal" style={{width:90,padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none"}}/>
-              <button onClick={saveWeight} disabled={!wInput.trim()} style={{padding:"7px 12px",borderRadius:8,border:"none",background:wInput.trim()?"linear-gradient(135deg,var(--accent),var(--accent-deep))":"var(--muted)",color:"#fff",fontWeight:700,cursor:wInput.trim()?"pointer":"default",fontSize:12,transition:"background 0.2s"}}>Salva</button>
+            <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{fontSize:12,color:"var(--text-dim)",flex:"1 1 120px",minWidth:0}}>⚖️ Peso {weights[selectedDate]?`${weights[selectedDate]} kg`:"(non registrato)"}</span>
+              <input value={wInput} onChange={e=>setWInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveWeight();}} placeholder={weights[selectedDate]?"aggiorna":"es. 64.5"} inputMode="decimal" style={{width:80,minWidth:0,padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none",flexShrink:0}}/>
+              <button onClick={saveWeight} disabled={!wInput.trim()} style={{flexShrink:0,padding:"7px 14px",borderRadius:8,border:"none",background:wInput.trim()?"linear-gradient(135deg,var(--accent),var(--accent-deep))":"var(--muted)",color:"#fff",fontWeight:700,cursor:wInput.trim()?"pointer":"default",fontSize:12,transition:"background 0.2s"}}>Salva</button>
             </div>
           </div>
 
@@ -1158,11 +1158,13 @@ function WeightView({weights,wInput,setWInput,saveWeight,removeWeight,selectedDa
       {/* input pesata */}
       <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:16,border:"1px solid var(--border)"}}>
         <h3 style={{margin:"0 0 10px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>Registra una pesata</h3>
-        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
-          <input type="date" value={selectedDate} max={todayKey()} onChange={e=>setSelectedDate(e.target.value)} style={{padding:"10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,colorScheme:"dark"}}/>
-          <input value={wInput} onChange={e=>setWInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveWeight();}} placeholder={weights[selectedDate]?`Attuale: ${weights[selectedDate]} kg`:"es. 64.5"} inputMode="decimal" style={inp}/>
-          <span style={{fontSize:13,color:"var(--text-dim)"}}>kg</span>
-          <button onClick={saveWeight} disabled={!wInput.trim()} style={{padding:"11px 16px",borderRadius:8,border:"none",background:wInput.trim()?"linear-gradient(135deg,var(--accent),var(--accent-deep))":"var(--muted)",color:"#fff",fontWeight:700,cursor:wInput.trim()?"pointer":"default",fontSize:13,transition:"background 0.2s"}}>Salva</button>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:8}}>
+          <input type="date" value={selectedDate} max={todayKey()} onChange={e=>setSelectedDate(e.target.value)} style={{width:"100%",padding:"10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,colorScheme:"dark",boxSizing:"border-box"}}/>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <input value={wInput} onChange={e=>setWInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveWeight();}} placeholder={weights[selectedDate]?`Attuale: ${weights[selectedDate]} kg`:"es. 64.5"} inputMode="decimal" style={{...inp,flex:1,margin:0}}/>
+            <span style={{fontSize:13,color:"var(--text-dim)",flexShrink:0}}>kg</span>
+            <button onClick={saveWeight} disabled={!wInput.trim()} style={{flexShrink:0,padding:"11px 18px",borderRadius:8,border:"none",background:wInput.trim()?"linear-gradient(135deg,var(--accent),var(--accent-deep))":"var(--muted)",color:"#fff",fontWeight:700,cursor:wInput.trim()?"pointer":"default",fontSize:13,transition:"background 0.2s"}}>Salva</button>
+          </div>
         </div>
         <p style={{margin:0,fontSize:11,color:"var(--text-dim)"}}>Per coerenza pesati sempre nelle stesse condizioni: mattino, a digiuno, dopo il bagno.</p>
       </div>
