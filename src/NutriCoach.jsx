@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { syncConfigured, getSession, aliasOf, signUp, signIn, signInWithGoogle, signOut, resetPassword, updatePassword, onAuthChange, pullRemote, pushRemote } from "./sync.js";
 import { estimateFromText, estimateFromPhoto, generateMenu } from "./estimate.js";
+import BarcodeScanner from "./BarcodeScanner.jsx";
 
 /* ============ DATABASE ALIMENTI BASE ============ */
 const FOOD_DB = {
@@ -271,7 +272,8 @@ function AppInner(){
   const [searchRes,setSearchRes]=useState([]);
   const [searching,setSearching]=useState(false);
   const [searchErr,setSearchErr]=useState(null);
-  const [newFood,setNewFood]=useState(null); // {slot,name,kcal,p,c,f,grams}
+  const [newFood,setNewFood]=useState(null);
+  const [barcodeSlot,setBarcodeSlot]=useState(null); // slot per scanner barcode // {slot,name,kcal,p,c,f,grams}
   const [estimate,setEstimate]=useState(null); // {slot, mode, loading, error, rows, fromPhoto, scaleObjectFound, scaleNote, contextText}
   const [menu,setMenu]=useState(null); // {plan, loading, error, data, dayLabel}
   const [woType,setWoType]=useState("padel");const [woKcal,setWoKcal]=useState("");const [woDur,setWoDur]=useState("");const [woNote,setWoNote]=useState("");
@@ -587,7 +589,10 @@ function AppInner(){
                   <input value={inputs[slot.id]||""} onChange={e=>setInputs(p=>({...p,[slot.id]:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter")addEntry(slot.id);}} placeholder="es: 150g pollo, 80g riso, 2 uova" style={{flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none"}}/>
                   <button onClick={()=>addEntry(slot.id)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+</button>
                 </div>
-                <button onClick={()=>{setSearchSlot(slot.id);setSearchQ("");setSearchRes([]);setSearchErr(null);}} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed var(--muted)",background:"transparent",color:"var(--text-soft)",cursor:"pointer",fontSize:12,marginBottom:8}}>🔍 Cerca un prodotto confezionato (es. "muller caffè")</button>
+                <div style={{display:"flex",gap:8,marginBottom:8}}>
+                  <button onClick={()=>{setSearchSlot(slot.id);setSearchQ("");setSearchRes([]);setSearchErr(null);}} style={{flex:1,padding:"9px",borderRadius:8,border:"1px dashed var(--muted)",background:"transparent",color:"var(--text-soft)",cursor:"pointer",fontSize:12}}>🔍 Cerca prodotto confezionato</button>
+                  <button onClick={()=>setBarcodeSlot(slot.id)} style={{padding:"9px 14px",borderRadius:8,border:"1px dashed var(--muted)",background:"transparent",color:"var(--text-soft)",cursor:"pointer",fontSize:18}} title="Scansiona codice a barre">📷</button>
+                </div>
                 <button onClick={()=>openEstimate(slot.id)} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed #6D28D9",background:"#2E1065",color:"#C4B5FD",cursor:"pointer",fontSize:12,marginBottom:items.length?12:0}}>✨ Stima un piatto (testo o foto)</button>
                 {warnings[slot.id]?.length>0&&<div style={{background:"#422006",borderRadius:8,padding:"8px 12px",margin:"10px 0",fontSize:11,color:"#FBBF24"}}>⚠️ Non riconosciuto: {warnings[slot.id].join(", ")}.
                   <button onClick={()=>setNewFood({slot:slot.id,name:warnings[slot.id][0].replace(/^\d+(?:[.,]\d+)?\s*(?:kg|etti?|g|gr|grammi|ml)?\s*/i,""),kcal:"",p:"",c:"",f:"",grams:"100"})} style={{display:"block",marginTop:8,padding:"7px 12px",borderRadius:6,border:"none",background:"#D97706",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:11}}>➕ Crealo come alimento personalizzato</button>
@@ -634,22 +639,24 @@ function AppInner(){
         {tab==="peso"&&<WeightView weights={weights} wInput={wInput} setWInput={setWInput} saveWeight={saveWeight} removeWeight={removeWeight} selectedDate={selectedDate} setSelectedDate={setSelectedDate} plans={plans}/>}
 
         {/* ===== STORICO ===== */}
-        {tab==="storico"&&(<>
-          {(()=>{const last7=historyKeys.slice(0,7);if(!last7.length)return null;const tot=last7.reduce((a,k)=>{const s=sum(Object.values(days[k].logs||{}).flat());const b=(days[k].workouts||[]).reduce((x,w)=>x+w.kcal,0);return{kcal:a.kcal+s.kcal,p:a.p+s.p,c:a.c+s.c,f:a.f+s.f,b:a.b+b};},{kcal:0,p:0,c:0,f:0,b:0});const n=last7.length;return(
-            <div style={{background:"linear-gradient(135deg,var(--header-from),var(--surface))",borderRadius:14,padding:18,marginBottom:16,border:"1px solid var(--accent-deep)"}}>
-              <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"#93C5FD"}}>📈 Media ultimi {n} giorni</h3>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>{[["Kcal",Math.round(tot.kcal/n),"var(--accent-light)"],["Prot",Math.round(tot.p/n),"var(--accent)"],["Carb",Math.round(tot.c/n),"#F59E0B"],["Grassi",Math.round(tot.f/n),"#10B981"],["🔥Bruc",Math.round(tot.b/n),"#FB923C"]].map(([k,v,c])=>(<div key={k} style={{background:"var(--bg)55",borderRadius:8,padding:"10px 6px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{k}</div></div>))}</div>
-            </div>);})()}
-          {historyKeys.length===0?<div style={{background:"var(--surface)",borderRadius:12,padding:30,textAlign:"center",border:"1px solid var(--border)"}}><div style={{fontSize:32,marginBottom:8}}>📅</div><p style={{margin:0,fontSize:14,color:"var(--text-soft)"}}>Nessun giorno registrato ancora.</p></div>:historyKeys.map(key=>{const d=days[key],t=sum(Object.values(d.logs||{}).flat());const pl=planForDate(plans,key);const tgt=pl?(d.dayType==="padel"?pl.sport.kcal:pl.targetKcal):2000;const kp=pct(t.kcal,tgt);const b=(d.workouts||[]).reduce((a,w)=>a+w.kcal,0),dowH=new Date(key+"T12:00:00").getDay(),wasFree=pl&&(pl.freeMeals?.[dowH]||[]).length>0;return(
-            <div key={key} onClick={()=>{setSelectedDate(key);setTab("oggi");setOpenSlot("colazione");}} style={{background:"var(--surface)",borderRadius:12,marginBottom:10,padding:"14px 16px",border:"1px solid var(--border)",cursor:"pointer"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div><div style={{fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>{fmtDate(key)}{d.dayType==="padel"&&<span style={{marginLeft:6}}>🎾</span>}{wasFree&&<span style={{marginLeft:6}}>🎉</span>}{b>0&&<span style={{marginLeft:6,fontSize:11,color:"#FB923C"}}>🔥{b}</span>}</div><div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>P:{Math.round(t.p)}g · C:{Math.round(t.c)}g · F:{Math.round(t.f)}g</div></div>
-                <div style={{textAlign:"right"}}><div style={{fontSize:17,fontWeight:800,color:kp>110?"#F87171":kp<70?"#FBBF24":"#34D399"}}>{Math.round(t.kcal)}</div><div style={{fontSize:10,color:"var(--text-dim)"}}>/ {tgt} kcal</div></div>
-              </div>
-              <div style={{height:6,background:"var(--bg)",borderRadius:3,overflow:"hidden",marginTop:10}}><div style={{height:"100%",width:`${Math.min(kp,100)}%`,background:kp>110?"#F87171":kp<70?"#FBBF24":"linear-gradient(90deg,var(--accent),var(--accent-2))",borderRadius:3}}/></div>
-            </div>);})}
-        </>)}
+        {tab==="storico"&&(<StoricoCon days={days} plans={plans} historyKeys={historyKeys} setSelectedDate={setSelectedDate} setTab={setTab} setOpenSlot={setOpenSlot} pct={pct}/>)}
+
       </div>
+
+      {/* ===== MODALE BARCODE ===== */}
+      {barcodeSlot&&(
+        <div onClick={()=>setBarcodeSlot(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
+          <BarcodeScanner
+            onClose={()=>setBarcodeSlot(null)}
+            onAdd={(prod,grams)=>{
+              const fct=grams/100;
+              const item={label:prod.name,grams:Math.round(grams),kcal:Math.round(prod.kcal100*fct),p:+(prod.p100*fct).toFixed(1),c:+(prod.c100*fct).toFixed(1),f:+(prod.f100*fct).toFixed(1)};
+              updateDay({logs:{...logs,[barcodeSlot]:[...(logs[barcodeSlot]||[]),item]}});
+              setBarcodeSlot(null);
+            }}
+          />
+        </div>
+      )}
 
       {/* ===== MODALE MENÙ DEL GIORNO ===== */}
       {menu&&(
@@ -1428,7 +1435,150 @@ function ProductRow({ prod, onAdd }) {
   );
 }
 
-/* ============ SCHERMATA LOGIN / REGISTRAZIONE ============ */
+/* ============ STORICO CON TOGGLE LISTA/GRAFICO ============ */
+function StoricoCon({days,plans,historyKeys,setSelectedDate,setTab,setOpenSlot,pct}){
+  const [view,setView]=useState("lista"); // lista | grafico
+  const sum2=items=>items.reduce((a,i)=>({kcal:a.kcal+i.kcal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{kcal:0,p:0,c:0,f:0});
+
+  const last7=historyKeys.slice(0,7);
+  const avg=last7.length?(()=>{
+    const tot=last7.reduce((a,k)=>{const s=sum2(Object.values(days[k].logs||{}).flat());const b=(days[k].workouts||[]).reduce((x,w)=>x+w.kcal,0);return{kcal:a.kcal+s.kcal,p:a.p+s.p,c:a.c+s.c,f:a.f+s.f,b:a.b+b};},{kcal:0,p:0,c:0,f:0,b:0});
+    const n=last7.length;return{kcal:Math.round(tot.kcal/n),p:Math.round(tot.p/n),c:Math.round(tot.c/n),f:Math.round(tot.f/n),b:Math.round(tot.b/n),n};
+  })():null;
+
+  return(<>
+    {avg&&(
+      <div style={{background:"linear-gradient(135deg,var(--header-from),var(--surface))",borderRadius:14,padding:18,marginBottom:16,border:"1px solid var(--accent-deep)"}}>
+        <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"#93C5FD"}}>📈 Media ultimi {avg.n} giorni</h3>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
+          {[["Kcal",avg.kcal,"var(--accent-light)"],["Prot",avg.p,"var(--accent)"],["Carb",avg.c,"#F59E0B"],["Grassi",avg.f,"#10B981"],["🔥Bruc",avg.b,"#FB923C"]].map(([k,v,c])=>(
+            <div key={k} style={{background:"var(--bg)55",borderRadius:8,padding:"10px 6px",textAlign:"center"}}>
+              <div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{k}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* toggle */}
+    <div style={{display:"flex",gap:6,marginBottom:14}}>
+      {[["lista","📋 Elenco"],["grafico","📊 Grafico"]].map(([id,lbl])=>(
+        <button key={id} onClick={()=>setView(id)} style={{padding:"8px 16px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:view===id?"var(--accent)":"var(--surface)",color:view===id?"#fff":"var(--text-soft)",border:`1px solid ${view===id?"transparent":"var(--border)"}`}}>{lbl}</button>
+      ))}
+    </div>
+
+    {historyKeys.length===0&&(
+      <div style={{background:"var(--surface)",borderRadius:12,padding:30,textAlign:"center",border:"1px solid var(--border)"}}>
+        <div style={{fontSize:32,marginBottom:8}}>📅</div>
+        <p style={{margin:0,fontSize:14,color:"var(--text-soft)"}}>Nessun giorno registrato ancora.</p>
+      </div>
+    )}
+
+    {view==="lista"&&historyKeys.length>0&&historyKeys.map(key=>{
+      const d=days[key],t=sum2(Object.values(d.logs||{}).flat());
+      const pl=planForDate(plans,key);
+      const tgt=pl?(d.dayType==="padel"?pl.sport.kcal:pl.targetKcal):2000;
+      const kp=pct(t.kcal,tgt);
+      const b=(d.workouts||[]).reduce((a,w)=>a+w.kcal,0);
+      const dowH=new Date(key+"T12:00:00").getDay(),wasFree=pl&&(pl.freeMeals?.[dowH]||[]).length>0;
+      return(
+        <div key={key} onClick={()=>{setSelectedDate(key);setTab("oggi");setOpenSlot("colazione");}} style={{background:"var(--surface)",borderRadius:12,marginBottom:10,padding:"14px 16px",border:"1px solid var(--border)",cursor:"pointer"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>{fmtDate(key)}{d.dayType==="padel"&&<span style={{marginLeft:6}}>🎾</span>}{wasFree&&<span style={{marginLeft:6}}>🎉</span>}{b>0&&<span style={{marginLeft:6,fontSize:11,color:"#FB923C"}}>🔥{b}</span>}</div>
+              <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>P:{Math.round(t.p)}g · C:{Math.round(t.c)}g · F:{Math.round(t.f)}g</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:17,fontWeight:800,color:kp>110?"#F87171":kp<70?"#FBBF24":"#34D399"}}>{Math.round(t.kcal)}</div>
+              <div style={{fontSize:10,color:"var(--text-dim)"}}>/ {tgt} kcal</div>
+            </div>
+          </div>
+          <div style={{height:6,background:"var(--bg)",borderRadius:3,overflow:"hidden",marginTop:10}}>
+            <div style={{height:"100%",width:`${Math.min(kp,100)}%`,background:kp>110?"#F87171":kp<70?"#FBBF24":"linear-gradient(90deg,var(--accent),var(--accent-2))",borderRadius:3}}/>
+          </div>
+        </div>
+      );
+    })}
+
+    {view==="grafico"&&historyKeys.length>0&&(
+      <StoricoGrafico days={days} plans={plans} historyKeys={historyKeys} sum2={sum2}/>
+    )}
+  </>);
+}
+
+function StoricoGrafico({days,plans,historyKeys,sum2}){
+  const [metric,setMetric]=useState("kcal"); // kcal|p|c|f
+  const pts=historyKeys.slice(0,14).reverse(); // dal meno recente al più recente
+
+  const vals=pts.map(k=>{
+    const t=sum2(Object.values(days[k].logs||{}).flat());
+    const pl=planForDate(plans,k);
+    const tgt=pl?(metric==="kcal"?(days[k].dayType==="padel"?pl.sport.kcal:pl.targetKcal):metric==="p"?pl.protein:metric==="c"?(days[k].dayType==="padel"?pl.sport.c:pl.carbs):pl.fat):null;
+    return {k, v:Math.round(metric==="kcal"?t.kcal:metric==="p"?t.p:metric==="c"?t.c:t.f), tgt};
+  });
+
+  const allV=vals.map(v=>v.v).filter(v=>v>0);
+  if(!allV.length) return <div style={{textAlign:"center",color:"var(--text-dim)",padding:30,fontSize:13}}>Nessun dato nel periodo.</div>;
+
+  const maxV=Math.max(...allV,...vals.map(v=>v.tgt||0))*1.12;
+  const W=660,H=200,padL=36,padR=10,padT=12,padB=32;
+  const bW=Math.floor((W-padL-padR)/pts.length*0.6);
+  const x=(i)=>padL+(i+0.5)*(W-padL-padR)/pts.length;
+  const y=(v)=>padT+(1-v/maxV)*(H-padT-padB);
+
+  const colors={kcal:"var(--accent)",p:"#3B82F6",c:"#F59E0B",f:"#10B981"};
+  const labels={kcal:"Calorie (kcal)",p:"Proteine (g)",c:"Carboidrati (g)",f:"Grassi (g)"};
+
+  return(
+    <div>
+      {/* toggle metrica */}
+      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+        {[["kcal","🔥 Calorie"],["p","🥩 Proteine"],["c","🍞 Carbo"],["f","🫒 Grassi"]].map(([id,lbl])=>(
+          <button key={id} onClick={()=>setMetric(id)} style={{padding:"6px 12px",borderRadius:16,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:metric===id?colors[id]:"var(--surface)",color:metric===id?"#fff":"var(--text-soft)",border:`1px solid ${metric===id?"transparent":"var(--border)"}`}}>{lbl}</button>
+        ))}
+      </div>
+
+      <div style={{background:"var(--surface)",borderRadius:12,padding:"14px 8px 8px",border:"1px solid var(--border)",overflowX:"auto"}}>
+        <div style={{fontSize:11,color:"var(--text-dim)",paddingLeft:12,marginBottom:6}}>{labels[metric]} — ultimi {pts.length} giorni</div>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",minWidth:320}}>
+          {/* griglie orizzontali */}
+          {[0.25,0.5,0.75,1].map(r=>(
+            <g key={r}>
+              <line x1={padL} y1={y(maxV*r)} x2={W-padR} y2={y(maxV*r)} stroke="var(--border)" strokeWidth="1" strokeDasharray="3 4"/>
+              <text x={padL-4} y={y(maxV*r)+3} fill="var(--text-dim)" fontSize="9" textAnchor="end">{Math.round(maxV*r)}</text>
+            </g>
+          ))}
+          {/* linea target */}
+          {vals[0]?.tgt&&(()=>{
+            const tgtLine=vals.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(1)},${y(v.tgt||0).toFixed(1)}`).join(" ");
+            return <path d={tgtLine} fill="none" stroke="#FBBF24" strokeWidth="1.5" strokeDasharray="5 3" opacity="0.8"/>;
+          })()}
+          {/* barre */}
+          {vals.map((v,i)=>{
+            const barH=Math.max(1,(H-padB-y(v.v)));
+            const over=v.tgt&&v.v>v.tgt*1.1;
+            const low=v.tgt&&v.v<v.tgt*0.75;
+            const col=over?"#F87171":low?"#FBBF24":colors[metric];
+            return(
+              <g key={v.k} style={{cursor:"pointer"}}>
+                <rect x={x(i)-bW/2} y={y(v.v)} width={bW} height={barH} rx="3" fill={col} opacity="0.85"/>
+                <text x={x(i)} y={H-padB+12} fill="var(--text-dim)" fontSize="8" textAnchor="middle">{fmtDate(v.k).slice(0,2)}{new Date(v.k+"T12:00:00").getDate()}</text>
+              </g>
+            );
+          })}
+        </svg>
+        <div style={{display:"flex",gap:12,padding:"0 12px",marginTop:4,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"var(--text-dim)"}}><div style={{width:20,height:3,background:colors[metric],borderRadius:2}}/> Effettivo</div>
+          {vals[0]?.tgt&&<div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"var(--text-dim)"}}><div style={{width:20,height:1.5,background:"#FBBF24",borderRadius:1,borderTop:"1.5px dashed #FBBF24"}}/> Target</div>}
+          <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"var(--text-dim)"}}><div style={{width:10,height:10,background:"#F87171",borderRadius:2}}/> Sopra target</div>
+          <div style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"var(--text-dim)"}}><div style={{width:10,height:10,background:"#FBBF24",borderRadius:2}}/> Sotto target</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function AuthScreen({theme,setTheme,onWelcome}){
   const [mode,setMode]=useState("login"); // login | signup | forgot
   const [email,setEmail]=useState("");
