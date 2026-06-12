@@ -60,3 +60,12 @@ async function handle(r) {
 
 // La feature è disponibile solo se l'endpoint esiste (online).
 export const estimateAvailable = typeof fetch !== "undefined";
+
+// ---- Generazione menù del giorno (usa il piano attivo) ----
+export async function generateMenu(planPayload) {
+  const r = await fetch("/api/menu", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(planPayload),
+  });
+  return handle(r);
+}

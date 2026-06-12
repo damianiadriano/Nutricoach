@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { syncConfigured, ensureSession, pullRemote, pushRemote, exportLinkCode, importLinkCode, getUserId } from "./sync.js";
-import { estimateFromText, estimateFromPhoto } from "./estimate.js";
+import { estimateFromText, estimateFromPhoto, generateMenu } from "./estimate.js";
 
 /* ============ DATABASE ALIMENTI BASE ============ */
 const FOOD_DB = {
@@ -243,6 +243,7 @@ function AppInner(){
   const [searchErr,setSearchErr]=useState(null);
   const [newFood,setNewFood]=useState(null); // {slot,name,kcal,p,c,f,grams}
   const [estimate,setEstimate]=useState(null); // {slot, mode, loading, error, rows, fromPhoto, scaleObjectFound, scaleNote, contextText}
+  const [menu,setMenu]=useState(null); // {plan, loading, error, data, dayLabel}
   const [woType,setWoType]=useState("padel");const [woKcal,setWoKcal]=useState("");const [woDur,setWoDur]=useState("");const [woNote,setWoNote]=useState("");
   const [wizard,setWizard]=useState(null); // stato wizard creazione piano
   const [weights,setWeights]=useState({}); // {dateKey: kg}
@@ -402,6 +403,42 @@ function AppInner(){
 
   const savePlan=(plan)=>{ setPlans(prev=>[...prev.filter(p=>p.validFrom!==plan.validFrom), plan]); setWizard(null); setTab("piano"); };
 
+  // ---- Menù del giorno dal piano attivo ----
+  const DOW_FULL=["Domenica","Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato"];
+  const SLOT_MAP={colazione:"colazione",spuntino_mattina:"spuntino1",pranzo:"pranzo",spuntino_pomeriggio:"spuntino2",cena:"cena"};
+  const openMenu=(plan)=>{ setMenu({plan,loading:false,error:null,data:null,dayIdx:new Date(selectedDate+"T12:00:00").getDay()}); };
+  const fetchMenu=async(plan,dayIdx)=>{
+    setMenu(m=>({...m,loading:true,error:null}));
+    const isSport=(dayType==="padel");
+    const freeSlots=(plan.freeMeals?.[dayIdx]||[]).map(s=>({colazione:"colazione",spuntino1:"spuntino_mattina",pranzo:"pranzo",spuntino2:"spuntino_pomeriggio",cena:"cena"}[s])).filter(Boolean);
+    const payload={
+      kcal:isSport?plan.sport.kcal:plan.targetKcal, protein:plan.protein,
+      carbs:isSport?plan.sport.c:plan.carbs, fat:plan.fat,
+      likes:plan.likes||[], dislikes:plan.dislikes||[], isSport, freeMeals:freeSlots,
+      dayLabel:DOW_FULL[dayIdx], seed:Math.floor(Math.random()*1e6),
+    };
+    try{ const res=await generateMenu(payload); setMenu(m=>({...m,loading:false,data:res})); }
+    catch(err){ setMenu(m=>({...m,loading:false,error:err.message})); }
+  };
+  // Inserisce gli ingredienti di un pasto suggerito nel diario del giorno selezionato
+  const addMenuMeal=(slotKey,meal)=>{
+    const targetSlot=SLOT_MAP[slotKey]; if(!targetSlot||!meal)return;
+    const DB={...ALL_DB,...customFoods};
+    const items=(meal.ingredienti||[]).map(ing=>{
+      // prova a usare valori reali dal DB se l'ingrediente è noto, altrimenti ripartisci i macro del pasto
+      let fk=null,bl=0; const n=norm(ing.nome); for(const k of Object.keys(DB)){if(n.includes(norm(k))&&k.length>bl){fk=k;bl=k.length;}}
+      if(fk){const food=DB[fk];const fct=ing.grammi/100;return{label:food.label+" · da menù",grams:ing.grammi,kcal:Math.round(food.kcal*fct),p:+(food.p*fct).toFixed(1),c:+(food.c*fct).toFixed(1),f:+(food.f*fct).toFixed(1),fromMenu:true};}
+      return null;
+    }).filter(Boolean);
+    // ingredienti non noti: aggiungili come singola voce stimata col residuo dei macro del pasto
+    const known=items.reduce((a,i)=>({k:a.k+i.kcal,p:a.p+i.p,c:a.c+i.c,f:a.f+i.f}),{k:0,p:0,c:0,f:0});
+    const resK=Math.max(0,(meal.kcal||0)-known.k);
+    if(resK>30){ items.push({label:meal.titolo+" (resto piatto) · da menù",grams:0,kcal:resK,p:Math.max(0,+( (meal.p||0)-known.p).toFixed(1)),c:Math.max(0,+((meal.c||0)-known.c).toFixed(1)),f:Math.max(0,+((meal.f||0)-known.f).toFixed(1)),fromMenu:true,est:true}); }
+    if(!items.length)return;
+    setDays(prev=>{const ex=prev[selectedDate]||{dayType:"normale",logs:{},workouts:[]};const cur=ex.logs[targetSlot]||[];return{...prev,[selectedDate]:{...ex,logs:{...ex.logs,[targetSlot]:[...cur,...items]}}};});
+  };
+  const addAllMenu=(data)=>{ Object.entries(data.meals||{}).forEach(([k,m])=>addMenuMeal(k,m)); setMenu(null); setTab("oggi"); };
+
   if(!loaded)return <div style={{background:"#0F172A",minHeight:"100vh",color:"#64748B",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif"}}>Caricamento…</div>;
 
   return(
@@ -485,7 +522,7 @@ function AppInner(){
         {/* ===== PIANO + WIZARD ===== */}
         {tab==="piano"&&(
           wizard ? <Wizard wizard={wizard} setWizard={setWizard} onSave={savePlan} analysis={analyzeHistory(days, plans.length?planForDate(plans,todayKey()):null)}/>
-          : <PlanView plans={plans} onNew={()=>setWizard({step:0, data:initWizardData(plans)})} onEdit={(pl)=>setWizard({step:0,data:{...pl,_editing:true}})}/>
+          : <PlanView plans={plans} onNew={()=>setWizard({step:0, data:initWizardData(plans)})} onEdit={(pl)=>setWizard({step:0,data:{...pl,_editing:true}})} onOpenMenu={openMenu}/>
         )}
 
         {/* ===== ALLENAMENTI ===== */}
@@ -534,6 +571,71 @@ function AppInner(){
             </div>);})}
         </>)}
       </div>
+
+      {/* ===== MODALE MENÙ DEL GIORNO ===== */}
+      {menu&&(
+        <div onClick={()=>setMenu(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#1E293B",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,maxHeight:"90vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
+            <div style={{padding:"16px 16px 12px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"#F1F5F9"}}>🍽️ Menù suggerito · {DOW_FULL[menu.dayIdx]}</h3>
+                <div style={{fontSize:11,color:"#64748B",marginTop:2}}>Target {dayType==="padel"?menu.plan.sport.kcal:menu.plan.targetKcal} kcal {dayType==="padel"?"🎾":""} · pranzo da ufficio</div>
+              </div>
+              <button onClick={()=>setMenu(null)} style={{background:"none",border:"none",color:"#64748B",fontSize:22,cursor:"pointer"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",padding:"14px 16px 24px"}}>
+              {!menu.data&&!menu.loading&&!menu.error&&(<>
+                <p style={{margin:"0 0 14px",fontSize:13,color:"#94A3B8",lineHeight:1.5}}>Genero una proposta di 5 pasti su misura dei tuoi target e preferenze (yogurt greco, niente latte, pranzo trasportabile in ufficio). Cambia ogni volta.</p>
+                <button onClick={()=>fetchMenu(menu.plan,menu.dayIdx)} style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#7C3AED,#5B21B6)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14}}>✨ Genera menù</button>
+              </>)}
+
+              {menu.loading&&<div style={{textAlign:"center",padding:30,color:"#C4B5FD",fontSize:13}}>🍳 Sto componendo il menù del giorno…</div>}
+
+              {menu.error&&!menu.loading&&(
+                <div style={{background:"#3B1212",border:"1px solid #7F1D1D",borderRadius:8,padding:"12px 14px",fontSize:12,color:"#FCA5A5"}}>
+                  {menu.error}
+                  <button onClick={()=>fetchMenu(menu.plan,menu.dayIdx)} style={{display:"block",marginTop:10,padding:"7px 12px",borderRadius:6,border:"1px solid #475569",background:"transparent",color:"#C4B5FD",cursor:"pointer",fontSize:12}}>Riprova</button>
+                </div>
+              )}
+
+              {menu.data&&!menu.loading&&(<>
+                {[["colazione","☀️ Colazione"],["spuntino_mattina","🍎 Spuntino mattino"],["pranzo","🥗 Pranzo (ufficio)"],["spuntino_pomeriggio","🍵 Spuntino pomeriggio"],["cena","🌙 Cena"]].map(([key,label])=>{
+                  const m=menu.data.meals?.[key]; if(!m)return null;
+                  return (
+                    <div key={key} style={{background:"#0F172A",borderRadius:10,padding:14,marginBottom:10,border:"1px solid #334155"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8,gap:8}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:11,color:"#64748B",marginBottom:2}}>{label}</div>
+                          <div style={{fontSize:14,fontWeight:700,color:"#F1F5F9"}}>{m.titolo}</div>
+                        </div>
+                        <div style={{textAlign:"right",whiteSpace:"nowrap"}}>
+                          <div style={{fontSize:15,fontWeight:800,color:"#60A5FA"}}>{m.kcal}</div>
+                          <div style={{fontSize:9,color:"#64748B"}}>kcal</div>
+                        </div>
+                      </div>
+                      {m.ingredienti?.length>0&&<div style={{fontSize:12,color:"#CBD5E1",marginBottom:6}}>{m.ingredienti.map(i=>`${i.nome} ${i.grammi}g`).join(" · ")}</div>}
+                      {m.prep&&<div style={{fontSize:11,color:"#94A3B8",fontStyle:"italic",marginBottom:8}}>👨‍🍳 {m.prep}</div>}
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:10,color:"#3B82F6"}}>P {m.p}g</span><span style={{fontSize:10,color:"#F59E0B"}}>C {m.c}g</span><span style={{fontSize:10,color:"#10B981"}}>F {m.f}g</span>
+                        <button onClick={()=>addMenuMeal(key,m)} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:6,border:"1px solid #334155",background:"transparent",color:"#60A5FA",cursor:"pointer",fontSize:11,fontWeight:700}}>+ Aggiungi al diario</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {(()=>{const t=Object.values(menu.data.meals||{}).reduce((a,m)=>({k:a.k+(m.kcal||0),p:a.p+(m.p||0),c:a.c+(m.c||0),f:a.f+(m.f||0)}),{k:0,p:0,c:0,f:0});return(
+                  <div style={{background:"#1E293B",borderRadius:10,padding:"10px 14px",marginBottom:12,border:"1px solid #334155",display:"flex",justifyContent:"space-around",textAlign:"center"}}>
+                    {[["Totale",t.k,"#60A5FA","kcal"],["Prot",t.p,"#3B82F6","g"],["Carb",t.c,"#F59E0B","g"],["Grassi",t.f,"#10B981","g"]].map(([l,v,c,u])=>(<div key={l}><div style={{fontSize:15,fontWeight:800,color:c}}>{Math.round(v)}</div><div style={{fontSize:9,color:"#64748B"}}>{l} ({u})</div></div>))}
+                  </div>
+                );})()}
+                {menu.data.nota&&<div style={{fontSize:11,color:"#94A3B8",lineHeight:1.5,marginBottom:12,padding:"0 4px"}}>💡 {menu.data.nota}</div>}
+                <button onClick={()=>addAllMenu(menu.data)} style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#059669,#047857)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14}}>✓ Aggiungi tutto il menù al diario</button>
+                <button onClick={()=>fetchMenu(menu.plan,menu.dayIdx)} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:12,marginTop:8}}>🔄 Genera un'altra proposta</button>
+                <div style={{fontSize:10,color:"#475569",marginTop:10,textAlign:"center",lineHeight:1.4}}>Le ricette sono suggerimenti generati: verifica porzioni e adatta ai tuoi gusti. I valori sono indicativi.</div>
+              </>)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== MODALE STIMA PIATTO ===== */}
       {estimate&&(
@@ -1189,7 +1291,7 @@ function Wizard({wizard,setWizard,onSave,analysis}){
 }
 
 /* ============ PLAN VIEW (lista versioni) ============ */
-function PlanView({plans,onNew,onEdit}){
+function PlanView({plans,onNew,onEdit,onOpenMenu}){
   const sorted=[...plans].sort((a,b)=>b.validFrom.localeCompare(a.validFrom));
   const current=sorted.find(p=>p.validFrom<=todayKey())||sorted[0];
   return(
@@ -1220,6 +1322,12 @@ function PlanView({plans,onNew,onEdit}){
               {[["Kcal",p.targetKcal,"#60A5FA"],["Prot",p.protein+"g","#3B82F6"],["Carb",p.carbs+"g","#F59E0B"],["Grassi",p.fat+"g","#10B981"]].map(([k,v,c])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"#64748B"}}>{k}</div></div>))}
             </div>
             {p.learnedAdjustment?<div style={{fontSize:10,color:"#6EE7B7",marginTop:8}}>🧠 Include aggiustamento dai dati: {p.learnedAdjustment>0?"+":""}{p.learnedAdjustment} kcal</div>:null}
+            {isCurrent&&(
+              <button onClick={()=>onOpenMenu(p)} style={{width:"100%",marginTop:12,padding:"12px",borderRadius:10,border:"none",background:"linear-gradient(135deg,#7C3AED,#5B21B6)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                🍽️ Genera menù del giorno
+              </button>
+            )}
+            {isCurrent&&<div style={{fontSize:10,color:"#64748B",marginTop:6,textAlign:"center"}}>Ricette su misura per i tuoi target, diverse ogni giorno</div>}
           </div>);})}
       </>)}
     </div>
