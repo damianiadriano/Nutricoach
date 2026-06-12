@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, Component } from "react";
 import { syncConfigured, getSession, aliasOf, signUp, signIn, signInWithGoogle, signOut, resetPassword, updatePassword, updateAlias, onAuthChange, pullRemote, pushRemote } from "./sync.js";
 import { estimateFromText, estimateFromPhoto, generateMenu } from "./estimate.js";
 import BarcodeScanner from "./BarcodeScanner.jsx";
+import { pushSupported, pushPermission, subscribePush, unsubscribePush, updatePushPrefs, getCurrentSubscription, notifyWeightMilestone, notifyPlanExpiring } from "./push.js";
 
 /* ============ DATABASE ALIMENTI BASE ============ */
 const FOOD_DB = {
@@ -383,6 +384,17 @@ function AppInner(){
 
   // logout
   const doLogout=async()=>{ await signOut(); setAuthUser(null); setLoaded(false); blankPayload(); setTab("oggi"); };
+
+  // Notifiche evento: 7 (obiettivo peso) e 8 (piano in scadenza)
+  useEffect(()=>{
+    if(!loaded||!authUser)return;
+    const wKeys=Object.keys(weights).sort();
+    if(!wKeys.length)return;
+    const current=weights[wKeys[wKeys.length-1]];
+    const activePlan=planForDate(plans,todayKey());
+    if(activePlan?.weight) notifyWeightMilestone(current,activePlan.weight,null);
+    if(plans.length) notifyPlanExpiring(plans);
+  },[weights,plans,loaded,authUser]);
 
   const activePlan = planForDate(plans, selectedDate);
   const curDay=days[selectedDate]||{dayType:"normale",logs:{},workouts:[]};
@@ -920,6 +932,9 @@ function SyncView({syncState,theme,setTheme,authUser,onLogout}){
     {/* Profilo */}
     <AliasEditor authUser={authUser} statusInfo={statusInfo} onLogout={onLogout}/>
 
+    {/* Notifiche */}
+    {authUser&&<NotificationSettings authUser={authUser}/>}
+
     <div style={{background:"#0F2A1E",borderRadius:12,padding:16,border:"1px solid #059669"}}>
       <div style={{fontSize:13,fontWeight:700,color:"#6EE7B7",marginBottom:6}}>🔒 Dati al sicuro</div>
       <p style={{margin:0,fontSize:12,color:"#A7F3D0",lineHeight:1.6}}>I tuoi dati sono protetti dal tuo account e accessibili da qualsiasi dispositivo facendo login con la stessa email. Più persone possono usare l'app sullo stesso telefono: basta uscire e accedere con un altro account.</p>
@@ -1424,7 +1439,130 @@ function ProductRow({ prod, onAdd }) {
   );
 }
 
-/* ============ ALIAS EDITOR ============ */
+/* ============ NOTIFICATION SETTINGS ============ */
+function NotificationSettings({authUser}){
+  const [perm,setPerm]=useState(()=>pushPermission());
+  const [subscribed,setSubscribed]=useState(false);
+  const [prefs,setPrefs]=useState({meal_reminder:true,meal_times:["08:30","13:00"],weigh_reminder:true,weigh_day:1,weigh_time:"07:30"});
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState(null);
+
+  useEffect(()=>{
+    getCurrentSubscription().then(s=>setSubscribed(!!s));
+  },[]);
+
+  if(!pushSupported()) return(
+    <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
+      <h3 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>🔔 Notifiche</h3>
+      <p style={{margin:0,fontSize:12,color:"var(--text-dim)",lineHeight:1.5}}>Le notifiche push non sono supportate su questo browser. Assicurati di aver installato NutriCoach sulla schermata Home (iOS 16.4+ richiesto).</p>
+    </div>
+  );
+
+  const getJwt=async()=>{
+    const {createClient}=await import("@supabase/supabase-js");
+    const sb=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_ANON_KEY,{auth:{storageKey:"nc-auth"}});
+    const {data:{session}}=await sb.auth.getSession();
+    return session?.access_token||null;
+  };
+
+  const toggle=async()=>{
+    setBusy(true);setMsg(null);
+    if(subscribed){
+      const jwt=await getJwt();
+      const r=await unsubscribePush(jwt);
+      if(r.ok){setSubscribed(false);setPerm(pushPermission());setMsg({t:"ok",x:"Notifiche disattivate."});}
+      else setMsg({t:"err",x:r.error});
+    }else{
+      const jwt=await getJwt();
+      const r=await subscribePush(jwt,prefs);
+      if(r.ok){setSubscribed(true);setPerm("granted");setMsg({t:"ok",x:"Notifiche attivate! Riceverai i promemoria."});}
+      else setMsg({t:"err",x:r.error});
+    }
+    setBusy(false);
+  };
+
+  const savePrefs=async()=>{
+    setBusy(true);setMsg(null);
+    const jwt=await getJwt();
+    const r=await updatePushPrefs(jwt,prefs);
+    if(r.ok)setMsg({t:"ok",x:"Preferenze salvate."});
+    else setMsg({t:"err",x:r.error});
+    setBusy(false);
+  };
+
+  const DOW_IT=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
+  const inp2={padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none"};
+
+  return(
+    <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <h3 style={{margin:0,fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>🔔 Notifiche</h3>
+        <button onClick={toggle} disabled={busy} style={{padding:"7px 14px",borderRadius:20,border:"none",background:subscribed?"#3B1212":"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:subscribed?"#F87171":"#fff",fontWeight:700,cursor:"pointer",fontSize:12,transition:"all 0.2s"}}>
+          {busy?"…":subscribed?"Disattiva":"Attiva"}
+        </button>
+      </div>
+
+      {perm==="denied"&&<div style={{background:"#422006",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#FBBF24",marginBottom:10,lineHeight:1.5}}>⚠️ Hai bloccato le notifiche sul browser. Per riattivarle: Impostazioni → Safari → NutriCoach → Notifiche → Consenti.</div>}
+
+      {subscribed&&(
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {/* Promemoria pasti */}
+          <div style={{background:"var(--bg)",borderRadius:10,padding:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:prefs.meal_reminder?10:0}}>
+              <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>🥗 Promemoria pasti</span>
+              <button onClick={()=>setPrefs(p=>({...p,meal_reminder:!p.meal_reminder}))} style={{width:42,height:24,borderRadius:12,border:"none",background:prefs.meal_reminder?"var(--accent)":"var(--muted)",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+                <div style={{position:"absolute",top:3,left:prefs.meal_reminder?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
+              </button>
+            </div>
+            {prefs.meal_reminder&&(
+              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                {(prefs.meal_times||[]).map((t,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:11,color:"var(--text-dim)"}}>{i===0?"Colazione":"Pranzo"}</span>
+                    <input type="time" value={t} onChange={e=>{const times=[...(prefs.meal_times||[])];times[i]=e.target.value;setPrefs(p=>({...p,meal_times:times}));}} style={{...inp2,colorScheme:"dark",width:100}}/>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Pesata settimanale */}
+          <div style={{background:"var(--bg)",borderRadius:10,padding:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:prefs.weigh_reminder?10:0}}>
+              <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>⚖️ Pesata settimanale</span>
+              <button onClick={()=>setPrefs(p=>({...p,weigh_reminder:!p.weigh_reminder}))} style={{width:42,height:24,borderRadius:12,border:"none",background:prefs.weigh_reminder?"var(--accent)":"var(--muted)",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+                <div style={{position:"absolute",top:3,left:prefs.weigh_reminder?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
+              </button>
+            </div>
+            {prefs.weigh_reminder&&(
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:11,color:"var(--text-dim)"}}>Giorno</span>
+                  <select value={prefs.weigh_day??1} onChange={e=>setPrefs(p=>({...p,weigh_day:parseInt(e.target.value)}))} style={{...inp2,colorScheme:"dark"}}>
+                    {DOW_IT.map((d,i)=><option key={i} value={i}>{d}</option>)}
+                  </select>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:11,color:"var(--text-dim)"}}>Ora</span>
+                  <input type="time" value={prefs.weigh_time||"07:30"} onChange={e=>setPrefs(p=>({...p,weigh_time:e.target.value}))} style={{...inp2,colorScheme:"dark",width:100}}/>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button onClick={savePrefs} disabled={busy} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>
+            {busy?"…":"Salva preferenze"}
+          </button>
+        </div>
+      )}
+
+      {msg&&<div style={{background:msg.t==="ok"?"#0F2A1E":"#3B1212",border:`1px solid ${msg.t==="ok"?"#059669":"#7F1D1D"}`,borderRadius:8,padding:"8px 12px",fontSize:12,color:msg.t==="ok"?"#6EE7B7":"#FCA5A5",marginTop:10}}>{msg.x}</div>}
+      {!subscribed&&perm!=="denied"&&<p style={{margin:"10px 0 0",fontSize:11,color:"var(--text-dim)",lineHeight:1.5}}>Attiva per ricevere promemoria pasti e pesata. Richiederebbe il permesso notifiche. L'app deve essere installata sulla schermata Home (iPhone).</p>}
+    </div>
+  );
+}
+
+
 function AliasEditor({authUser,statusInfo,onLogout}){
   const [editing,setEditing]=useState(false);
   const [val,setVal]=useState(aliasOf(authUser));
