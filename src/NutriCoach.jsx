@@ -213,12 +213,12 @@ class ErrorBoundary extends Component{
   static getDerivedStateFromError(e){return{err:e};}
   render(){
     if(this.state.err)return(
-      <div style={{fontFamily:"sans-serif",background:"#0F172A",minHeight:"100vh",color:"#E2E8F0",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{fontFamily:"sans-serif",background:"var(--bg)",minHeight:"100vh",color:"var(--text)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
         <div style={{textAlign:"center",maxWidth:420}}>
           <div style={{fontSize:40,marginBottom:12}}>🛟</div>
           <h2 style={{margin:"0 0 8px",fontSize:18}}>Qualcosa è andato storto</h2>
-          <p style={{fontSize:13,color:"#94A3B8",lineHeight:1.6}}>I tuoi dati sono al sicuro. Ricarica l'app per riprendere.</p>
-          <button onClick={()=>location.reload()} style={{marginTop:12,padding:"10px 20px",borderRadius:8,border:"none",background:"#2563EB",color:"#fff",fontWeight:700,cursor:"pointer"}}>Ricarica</button>
+          <p style={{fontSize:13,color:"var(--text-soft)",lineHeight:1.6}}>I tuoi dati sono al sicuro. Ricarica l'app per riprendere.</p>
+          <button onClick={()=>location.reload()} style={{marginTop:12,padding:"10px 20px",borderRadius:8,border:"none",background:"var(--accent)",color:"#fff",fontWeight:700,cursor:"pointer"}}>Ricarica</button>
         </div>
       </div>);
     return this.props.children;
@@ -226,6 +226,30 @@ class ErrorBoundary extends Component{
 }
 
 export default function App(){return <ErrorBoundary><AppInner/></ErrorBoundary>;}
+
+/* ============ TEMI ============ */
+const THEMES={
+  midnight:{
+    name:"Midnight",
+    "--bg":"#0F172A","--surface":"#1E293B","--border":"#334155","--muted":"#475569",
+    "--text-dim":"#64748B","--text-soft":"#94A3B8","--text":"#E2E8F0","--text-strong":"#F1F5F9",
+    "--accent":"#3B82F6","--accent-deep":"#1D4ED8","--accent-2":"#06B6D4","--accent-light":"#60A5FA",
+    "--header-from":"#1E3A5F","--header-to":"#0F172A",
+  },
+  fresh:{
+    name:"Fresh",
+    "--bg":"#F6F7F4","--surface":"#FFFFFF","--border":"#E4E8E0","--muted":"#A8B0A4",
+    "--text-dim":"#7C8579","--text-soft":"#5C6657","--text":"#26402D","--text-strong":"#16331F",
+    "--accent":"#2F7D4F","--accent-deep":"#236340","--accent-2":"#7BAE7F","--accent-light":"#2F7D4F",
+    "--header-from":"#E8EDE3","--header-to":"#F6F7F4",
+  },
+};
+function applyTheme(key){
+  const t=THEMES[key]||THEMES.midnight;
+  const root=document.documentElement;
+  Object.entries(t).forEach(([k,v])=>{ if(k.startsWith("--"))root.style.setProperty(k,v); });
+  root.style.setProperty("color-scheme", key==="fresh"?"light":"dark");
+}
 
 function AppInner(){
   const [tab,setTab]=useState("oggi");
@@ -248,6 +272,8 @@ function AppInner(){
   const [wizard,setWizard]=useState(null); // stato wizard creazione piano
   const [weights,setWeights]=useState({}); // {dateKey: kg}
   const [customFoods,setCustomFoods]=useState({}); // {nome: {p,c,f,kcal,label,unit?}}
+  const [theme,setTheme]=useState(()=>{ try{return localStorage.getItem("nc-theme")||"midnight";}catch(e){return "midnight";} });
+  useEffect(()=>{ applyTheme(theme); try{localStorage.setItem("nc-theme",theme);}catch(e){} },[theme]);
   const [wInput,setWInput]=useState("");
   const [syncState,setSyncState]=useState({status:"off",last:null}); // off|connecting|synced|error|saving
   const pushTimer=useRef(null);
@@ -382,21 +408,21 @@ function AppInner(){
   const macroBar=(label,val,tgt,color)=>{const p=Math.min(pct(val,tgt),130),over=val>tgt;return(
     <div style={{marginBottom:14}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:5,fontSize:13}}>
-        <span style={{color:"#E2E8F0",fontWeight:600}}>{label}</span>
-        <span style={{color:"#94A3B8"}}><strong style={{color}}>{Math.round(val)}</strong> / {tgt}g <span style={{color:over?"#F87171":diff(val,tgt)<-tgt*0.2?"#FBBF24":"#34D399",marginLeft:6,fontSize:11}}>({diff(val,tgt)>=0?"+":""}{diff(val,tgt)})</span></span>
+        <span style={{color:"var(--text)",fontWeight:600}}>{label}</span>
+        <span style={{color:"var(--text-soft)"}}><strong style={{color}}>{Math.round(val)}</strong> / {tgt}g <span style={{color:over?"#F87171":diff(val,tgt)<-tgt*0.2?"#FBBF24":"#34D399",marginLeft:6,fontSize:11}}>({diff(val,tgt)>=0?"+":""}{diff(val,tgt)})</span></span>
       </div>
-      <div style={{height:9,background:"#0F172A",borderRadius:5,overflow:"hidden"}}><div style={{height:"100%",width:`${(p/130)*100}%`,background:over?"#F87171":color,borderRadius:5,transition:"width .5s"}}/></div>
+      <div style={{height:9,background:"var(--bg)",borderRadius:5,overflow:"hidden"}}><div style={{height:"100%",width:`${(p/130)*100}%`,background:over?"#F87171":color,borderRadius:5,transition:"width .5s"}}/></div>
     </div>);};
 
   const kcalPct=pct(totals.kcal,target.kcal),pPct=pct(totals.p,target.p);
-  let verdict={txt:activePlan?"Inizia a registrare i pasti":"Crea il tuo piano nella scheda 🎯 Piano",color:"#64748B",emoji:activePlan?"📝":"🎯"};
+  let verdict={txt:activePlan?"Inizia a registrare i pasti":"Crea il tuo piano nella scheda 🎯 Piano",color:"var(--text-dim)",emoji:activePlan?"📝":"🎯"};
   if(allItems.length){
     if(freeSlotsToday.length)verdict={txt:"Giorno con pasto libero — goditelo senza sensi di colpa",color:"#FCD34D",emoji:"🎉"};
     else if(kcalPct>=85&&kcalPct<=110&&pPct>=85)verdict={txt:"Allineato al piano! Ottimo equilibrio",color:"#34D399",emoji:"✅"};
     else if(kcalPct>110)verdict={txt:"Sopra il target calorico — modera le porzioni",color:"#F87171",emoji:"⚠️"};
     else if(kcalPct<70)verdict={txt:"Sotto al target — mangia a sufficienza",color:"#FBBF24",emoji:"⬇️"};
     else if(pPct<75)verdict={txt:"Proteine basse — aggiungi una fonte proteica",color:"#FBBF24",emoji:"🥩"};
-    else verdict={txt:"Sulla buona strada, continua così",color:"#60A5FA",emoji:"👍"};
+    else verdict={txt:"Sulla buona strada, continua così",color:"var(--accent-light)",emoji:"👍"};
   }
 
   const historyKeys=useMemo(()=>Object.keys(days).filter(k=>{const d=days[k];return Object.values(d.logs||{}).flat().length||(d.workouts||[]).length;}).sort().reverse(),[days]);
@@ -439,20 +465,20 @@ function AppInner(){
   };
   const addAllMenu=(data)=>{ Object.entries(data.meals||{}).forEach(([k,m])=>addMenuMeal(k,m)); setMenu(null); setTab("oggi"); };
 
-  if(!loaded)return <div style={{background:"#0F172A",minHeight:"100vh",color:"#64748B",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif"}}>Caricamento…</div>;
+  if(!loaded)return <div style={{background:"var(--bg)",minHeight:"100vh",color:"var(--text-dim)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"sans-serif"}}>Caricamento…</div>;
 
   return(
-    <div style={{fontFamily:"'Inter','Segoe UI',sans-serif",background:"#0F172A",minHeight:"100vh",color:"#E2E8F0"}}>
-      <div style={{background:"linear-gradient(135deg,#1E3A5F,#0F172A)",borderBottom:"1px solid #1E293B",padding:"22px 16px 0"}}>
+    <div style={{fontFamily:"'Inter','Segoe UI',sans-serif",background:"var(--bg)",minHeight:"100vh",color:"var(--text)"}}>
+      <div style={{background:"linear-gradient(135deg,var(--header-from),var(--header-to))",borderBottom:"1px solid var(--surface)",padding:"22px 16px 0"}}>
         <div style={{maxWidth:720,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:6}}>
             <img src="/icon-192.png" alt="" style={{width:36,height:36,borderRadius:10}}/>
-            <div><h1 style={{margin:0,fontSize:19,fontWeight:700,color:"#F1F5F9"}}>NutriCoach</h1><p style={{margin:0,fontSize:12,color:"#64748B"}}>Piano su misura · diario · allenamenti · storico versioni</p></div>
-            {syncConfigured&&<div onClick={()=>setTab("sync")} style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:"#64748B"}}><span style={{width:8,height:8,borderRadius:"50%",background:{synced:"#34D399",saving:"#FBBF24",connecting:"#60A5FA",error:"#F87171",off:"#475569"}[syncState.status]}}/>{({synced:"Sincronizzato",saving:"Salvataggio…",connecting:"Connessione…",error:"Offline",off:""})[syncState.status]}</div>}
+            <div><h1 style={{margin:0,fontSize:19,fontWeight:700,color:"var(--text-strong)"}}>NutriCoach</h1><p style={{margin:0,fontSize:12,color:"var(--text-dim)"}}>Piano su misura · diario · allenamenti · storico versioni</p></div>
+            {syncConfigured&&<div onClick={()=>setTab("sync")} style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:"var(--text-dim)"}}><span style={{width:8,height:8,borderRadius:"50%",background:{synced:"#34D399",saving:"#FBBF24",connecting:"var(--accent-light)",error:"#F87171",off:"var(--muted)"}[syncState.status]}}/>{({synced:"Sincronizzato",saving:"Salvataggio…",connecting:"Connessione…",error:"Offline",off:""})[syncState.status]}</div>}
           </div>
           <div style={{display:"flex",gap:0,marginTop:14,overflowX:"auto"}}>
             {[["oggi","📝 Diario"],["piano","🎯 Piano"],["allenamenti","🔥 Workout"],["peso","⚖️ Peso"],["coach","🧭 Coach"],["storico","📅 Storico"],["sync","☁️ Sync"]].map(([id,l])=>(
-              <button key={id} onClick={()=>setTab(id)} style={{padding:"10px 14px",fontSize:13,fontWeight:600,border:"none",cursor:"pointer",background:"transparent",whiteSpace:"nowrap",color:tab===id?"#60A5FA":"#64748B",borderBottom:tab===id?"2px solid #3B82F6":"2px solid transparent"}}>{l}</button>
+              <button key={id} onClick={()=>setTab(id)} style={{padding:"10px 14px",fontSize:13,fontWeight:600,border:"none",cursor:"pointer",background:"transparent",whiteSpace:"nowrap",color:tab===id?"var(--accent-light)":"var(--text-dim)",borderBottom:tab===id?"2px solid var(--accent)":"2px solid transparent"}}>{l}</button>
             ))}
           </div>
         </div>
@@ -462,11 +488,11 @@ function AppInner(){
 
         {(tab==="oggi"||tab==="allenamenti")&&(
           <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
-            <input type="date" value={selectedDate} max={todayKey()} onChange={e=>{setSelectedDate(e.target.value);setOpenSlot("colazione");}} style={{padding:"7px 10px",borderRadius:8,border:"1px solid #334155",background:"#1E293B",color:"#E2E8F0",fontSize:13,colorScheme:"dark"}}/>
-            {selectedDate!==todayKey()&&<button onClick={()=>setSelectedDate(todayKey())} style={{padding:"7px 10px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#60A5FA",fontSize:12,cursor:"pointer"}}>→ Oggi</button>}
-            {activePlan && <span style={{fontSize:11,color:"#64748B",marginLeft:4}}>Piano attivo dal {fmtShort(activePlan.validFrom)}</span>}
+            <input type="date" value={selectedDate} max={todayKey()} onChange={e=>{setSelectedDate(e.target.value);setOpenSlot("colazione");}} style={{padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,colorScheme:"dark"}}/>
+            {selectedDate!==todayKey()&&<button onClick={()=>setSelectedDate(todayKey())} style={{padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--accent-light)",fontSize:12,cursor:"pointer"}}>→ Oggi</button>}
+            {activePlan && <span style={{fontSize:11,color:"var(--text-dim)",marginLeft:4}}>Piano attivo dal {fmtShort(activePlan.validFrom)}</span>}
             <div style={{display:"flex",gap:6,marginLeft:"auto"}}>
-              {[["normale","Normale"],["padel","🎾 Sport"]].map(([id,lbl])=>(<button key={id} onClick={()=>setDayType(id)} style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:dayType===id?"linear-gradient(135deg,#2563EB,#1D4ED8)":"#1E293B",color:dayType===id?"#fff":"#94A3B8",outline:dayType===id?"none":"1px solid #334155"}}>{lbl}</button>))}
+              {[["normale","Normale"],["padel","🎾 Sport"]].map(([id,lbl])=>(<button key={id} onClick={()=>setDayType(id)} style={{padding:"6px 12px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:dayType===id?"linear-gradient(135deg,var(--accent),var(--accent-deep))":"var(--surface)",color:dayType===id?"#fff":"var(--text-soft)",outline:dayType===id?"none":"1px solid var(--border)"}}>{lbl}</button>))}
             </div>
           </div>
         )}
@@ -474,49 +500,49 @@ function AppInner(){
         {/* ===== DIARIO ===== */}
         {tab==="oggi"&&(<>
           {!activePlan && (
-            <div onClick={()=>setTab("piano")} style={{background:"linear-gradient(135deg,#1E3A5F,#1E293B)",border:"1px solid #3B82F6",borderRadius:12,padding:16,marginBottom:14,cursor:"pointer"}}>
+            <div onClick={()=>setTab("piano")} style={{background:"linear-gradient(135deg,var(--header-from),var(--surface))",border:"1px solid var(--accent)",borderRadius:12,padding:16,marginBottom:14,cursor:"pointer"}}>
               <div style={{fontSize:14,fontWeight:700,color:"#93C5FD",marginBottom:4}}>🎯 Crea il tuo piano personalizzato</div>
-              <div style={{fontSize:12,color:"#94A3B8"}}>Rispondi a poche domande e genero target calorico e macro su misura. Tocca qui per iniziare.</div>
+              <div style={{fontSize:12,color:"var(--text-soft)"}}>Rispondi a poche domande e genero target calorico e macro su misura. Tocca qui per iniziare.</div>
             </div>
           )}
           {freeSlotsToday.length>0&&<div style={{background:"linear-gradient(135deg,#D9770622,#B4530922)",border:"1px solid #D9770644",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#FCD34D"}}>🎉 Pasto libero previsto oggi: <strong>{freeSlotsToday.map(s=>MEAL_SLOTS.find(m=>m.id===s)?.label).join(", ")}</strong></div>}
 
-          <div style={{background:"#1E293B",borderRadius:14,padding:18,marginBottom:16,border:"1px solid #334155"}}>
+          <div style={{background:"var(--surface)",borderRadius:14,padding:18,marginBottom:16,border:"1px solid var(--border)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16,flexWrap:"wrap",gap:8}}>
-              <div><div style={{fontSize:11,color:"#64748B",marginBottom:2}}>CALORIE · {fmtDate(selectedDate).toUpperCase()}</div><div style={{fontSize:32,fontWeight:800,color:kcalPct>110?"#F87171":"#60A5FA",lineHeight:1}}>{Math.round(totals.kcal)}<span style={{fontSize:16,color:"#475569",fontWeight:600}}> / {target.kcal}</span></div></div>
-              <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"#64748B"}}>Differenza</div><div style={{fontSize:20,fontWeight:800,color:diff(totals.kcal,target.kcal)>0?"#F87171":"#34D399"}}>{diff(totals.kcal,target.kcal)>=0?"+":""}{diff(totals.kcal,target.kcal)} kcal</div></div>
+              <div><div style={{fontSize:11,color:"var(--text-dim)",marginBottom:2}}>CALORIE · {fmtDate(selectedDate).toUpperCase()}</div><div style={{fontSize:32,fontWeight:800,color:kcalPct>110?"#F87171":"var(--accent-light)",lineHeight:1}}>{Math.round(totals.kcal)}<span style={{fontSize:16,color:"var(--muted)",fontWeight:600}}> / {target.kcal}</span></div></div>
+              <div style={{textAlign:"right"}}><div style={{fontSize:11,color:"var(--text-dim)"}}>Differenza</div><div style={{fontSize:20,fontWeight:800,color:diff(totals.kcal,target.kcal)>0?"#F87171":"#34D399"}}>{diff(totals.kcal,target.kcal)>=0?"+":""}{diff(totals.kcal,target.kcal)} kcal</div></div>
             </div>
-            <div style={{height:11,background:"#0F172A",borderRadius:6,overflow:"hidden",marginBottom:18}}><div style={{height:"100%",width:`${Math.min(kcalPct,100)}%`,background:kcalPct>110?"#F87171":"linear-gradient(90deg,#3B82F6,#06B6D4)",borderRadius:6,transition:"width .5s"}}/></div>
-            {macroBar("Proteine",totals.p,target.p,"#3B82F6")}{macroBar("Carboidrati",totals.c,target.c,"#F59E0B")}{macroBar("Grassi",totals.f,target.f,"#10B981")}
-            {burned>0&&<div style={{display:"flex",gap:10,marginTop:6,marginBottom:6}}><div style={{flex:1,background:"#0F172A",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"#64748B"}}>🔥 BRUCIATE</div><div style={{fontSize:18,fontWeight:800,color:"#FB923C"}}>{burned} kcal</div></div><div style={{flex:1,background:"#0F172A",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"#64748B"}}>⚖️ NETTO</div><div style={{fontSize:18,fontWeight:800,color:"#A78BFA"}}>{Math.round(netKcal)} kcal</div></div></div>}
-            <div style={{marginTop:8,background:"#0F172A",borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,borderLeft:`3px solid ${verdict.color}`}}><span style={{fontSize:20}}>{verdict.emoji}</span><span style={{fontSize:13,color:verdict.color,fontWeight:600}}>{verdict.txt}</span></div>
+            <div style={{height:11,background:"var(--bg)",borderRadius:6,overflow:"hidden",marginBottom:18}}><div style={{height:"100%",width:`${Math.min(kcalPct,100)}%`,background:kcalPct>110?"#F87171":"linear-gradient(90deg,var(--accent),var(--accent-2))",borderRadius:6,transition:"width .5s"}}/></div>
+            {macroBar("Proteine",totals.p,target.p,"var(--accent)")}{macroBar("Carboidrati",totals.c,target.c,"#F59E0B")}{macroBar("Grassi",totals.f,target.f,"#10B981")}
+            {burned>0&&<div style={{display:"flex",gap:10,marginTop:6,marginBottom:6}}><div style={{flex:1,background:"var(--bg)",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"var(--text-dim)"}}>🔥 BRUCIATE</div><div style={{fontSize:18,fontWeight:800,color:"#FB923C"}}>{burned} kcal</div></div><div style={{flex:1,background:"var(--bg)",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"var(--text-dim)"}}>⚖️ NETTO</div><div style={{fontSize:18,fontWeight:800,color:"#A78BFA"}}>{Math.round(netKcal)} kcal</div></div></div>}
+            <div style={{marginTop:8,background:"var(--bg)",borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,borderLeft:`3px solid ${verdict.color}`}}><span style={{fontSize:20}}>{verdict.emoji}</span><span style={{fontSize:13,color:verdict.color,fontWeight:600}}>{verdict.txt}</span></div>
             <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:12,color:"#64748B",flex:1}}>⚖️ Peso del giorno {weights[selectedDate]?`: ${weights[selectedDate]} kg`:""}</span>
-              <input value={wInput} onChange={e=>setWInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveWeight();}} placeholder={weights[selectedDate]?"aggiorna":"es. 64.5"} inputMode="decimal" style={{width:90,padding:"7px 10px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,outline:"none"}}/>
-              <button onClick={saveWeight} style={{padding:"7px 12px",borderRadius:8,border:"none",background:"#1D4ED8",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>Salva</button>
+              <span style={{fontSize:12,color:"var(--text-dim)",flex:1}}>⚖️ Peso del giorno {weights[selectedDate]?`: ${weights[selectedDate]} kg`:""}</span>
+              <input value={wInput} onChange={e=>setWInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveWeight();}} placeholder={weights[selectedDate]?"aggiorna":"es. 64.5"} inputMode="decimal" style={{width:90,padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none"}}/>
+              <button onClick={saveWeight} style={{padding:"7px 12px",borderRadius:8,border:"none",background:"var(--accent-deep)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>Salva</button>
             </div>
           </div>
 
           {MEAL_SLOTS.map(slot=>{const items=logs[slot.id]||[],st=sum(items),open=openSlot===slot.id,isFree=freeSlotsToday.includes(slot.id);return(
-            <div key={slot.id} style={{background:"#1E293B",borderRadius:12,marginBottom:10,border:isFree?"1px solid #D9770655":"1px solid #334155",overflow:"hidden"}}>
+            <div key={slot.id} style={{background:"var(--surface)",borderRadius:12,marginBottom:10,border:isFree?"1px solid #D9770655":"1px solid var(--border)",overflow:"hidden"}}>
               <button onClick={()=>setOpenSlot(open?null:slot.id)} style={{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"13px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{slot.icon}</span><span style={{fontSize:14,fontWeight:700,color:"#F1F5F9"}}>{slot.label}</span>{isFree&&<span style={{fontSize:10,background:"#D9770633",color:"#FCD34D",borderRadius:8,padding:"2px 7px"}}>LIBERO</span>}{items.length>0&&<span style={{fontSize:11,background:"#0F172A",color:"#60A5FA",borderRadius:10,padding:"2px 8px"}}>{items.length}</span>}</div>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>{items.length>0&&<span style={{fontSize:13,fontWeight:700,color:"#60A5FA"}}>{Math.round(st.kcal)} kcal</span>}<span style={{color:"#64748B"}}>{open?"▲":"▼"}</span></div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:18}}>{slot.icon}</span><span style={{fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>{slot.label}</span>{isFree&&<span style={{fontSize:10,background:"#D9770633",color:"#FCD34D",borderRadius:8,padding:"2px 7px"}}>LIBERO</span>}{items.length>0&&<span style={{fontSize:11,background:"var(--bg)",color:"var(--accent-light)",borderRadius:10,padding:"2px 8px"}}>{items.length}</span>}</div>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>{items.length>0&&<span style={{fontSize:13,fontWeight:700,color:"var(--accent-light)"}}>{Math.round(st.kcal)} kcal</span>}<span style={{color:"var(--text-dim)"}}>{open?"▲":"▼"}</span></div>
               </button>
               {open&&(<div style={{padding:"0 16px 16px"}}>
                 <div style={{display:"flex",gap:8,marginBottom:items.length?12:0}}>
-                  <input value={inputs[slot.id]||""} onChange={e=>setInputs(p=>({...p,[slot.id]:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter")addEntry(slot.id);}} placeholder="es: 150g pollo, 80g riso, 2 uova" style={{flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,outline:"none"}}/>
-                  <button onClick={()=>addEntry(slot.id)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+</button>
+                  <input value={inputs[slot.id]||""} onChange={e=>setInputs(p=>({...p,[slot.id]:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter")addEntry(slot.id);}} placeholder="es: 150g pollo, 80g riso, 2 uova" style={{flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none"}}/>
+                  <button onClick={()=>addEntry(slot.id)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+</button>
                 </div>
-                <button onClick={()=>{setSearchSlot(slot.id);setSearchQ("");setSearchRes([]);setSearchErr(null);}} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed #475569",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:12,marginBottom:8}}>🔍 Cerca un prodotto confezionato (es. "muller caffè")</button>
+                <button onClick={()=>{setSearchSlot(slot.id);setSearchQ("");setSearchRes([]);setSearchErr(null);}} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed var(--muted)",background:"transparent",color:"var(--text-soft)",cursor:"pointer",fontSize:12,marginBottom:8}}>🔍 Cerca un prodotto confezionato (es. "muller caffè")</button>
                 <button onClick={()=>openEstimate(slot.id)} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px dashed #6D28D9",background:"#2E1065",color:"#C4B5FD",cursor:"pointer",fontSize:12,marginBottom:items.length?12:0}}>✨ Stima un piatto (testo o foto)</button>
                 {warnings[slot.id]?.length>0&&<div style={{background:"#422006",borderRadius:8,padding:"8px 12px",margin:"10px 0",fontSize:11,color:"#FBBF24"}}>⚠️ Non riconosciuto: {warnings[slot.id].join(", ")}.
                   <button onClick={()=>setNewFood({slot:slot.id,name:warnings[slot.id][0].replace(/^\d+(?:[.,]\d+)?\s*(?:kg|etti?|g|gr|grammi|ml)?\s*/i,""),kcal:"",p:"",c:"",f:"",grams:"100"})} style={{display:"block",marginTop:8,padding:"7px 12px",borderRadius:6,border:"none",background:"#D97706",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:11}}>➕ Crealo come alimento personalizzato</button>
                 </div>}
-                {items.map((it,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #0F172A"}}><div style={{flex:1}}><div style={{fontSize:13,color:"#E2E8F0",fontWeight:600}}>{it.fromPhoto&&<span title="Stima da foto" style={{marginRight:4}}>📷</span>}{it.est&&!it.fromPhoto&&<span title="Stima" style={{marginRight:4}}>✨</span>}{it.label} <span style={{color:"#64748B",fontWeight:400}}>· {it.grams}g</span></div><div style={{fontSize:11,color:"#64748B"}}>P:{it.p} C:{it.c} F:{it.f}</div></div><span style={{fontSize:13,color:"#60A5FA",fontWeight:700}}>{it.kcal}</span><button onClick={()=>removeItem(slot.id,i)} style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:16,padding:4}}>×</button></div>))}
+                {items.map((it,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid var(--bg)"}}><div style={{flex:1}}><div style={{fontSize:13,color:"var(--text)",fontWeight:600}}>{it.fromPhoto&&<span title="Stima da foto" style={{marginRight:4}}>📷</span>}{it.est&&!it.fromPhoto&&<span title="Stima" style={{marginRight:4}}>✨</span>}{it.label} <span style={{color:"var(--text-dim)",fontWeight:400}}>· {it.grams}g</span></div><div style={{fontSize:11,color:"var(--text-dim)"}}>P:{it.p} C:{it.c} F:{it.f}</div></div><span style={{fontSize:13,color:"var(--accent-light)",fontWeight:700}}>{it.kcal}</span><button onClick={()=>removeItem(slot.id,i)} style={{background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",fontSize:16,padding:4}}>×</button></div>))}
               </div>)}
             </div>);})}
-          {(allItems.length>0||workouts.length>0)&&<button onClick={clearDay} style={{marginTop:6,padding:"8px 14px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#64748B",cursor:"pointer",fontSize:12}}>↺ Azzera questo giorno</button>}
+          {(allItems.length>0||workouts.length>0)&&<button onClick={clearDay} style={{marginTop:6,padding:"8px 14px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--text-dim)",cursor:"pointer",fontSize:12}}>↺ Azzera questo giorno</button>}
         </>)}
 
         {/* ===== PIANO + WIZARD ===== */}
@@ -527,26 +553,26 @@ function AppInner(){
 
         {/* ===== ALLENAMENTI ===== */}
         {tab==="allenamenti"&&(<>
-          <div style={{background:"linear-gradient(135deg,#7C2D12,#1E293B)",borderRadius:14,padding:18,marginBottom:16,border:"1px solid #EA580C55"}}>
+          <div style={{background:"linear-gradient(135deg,#7C2D12,var(--surface))",borderRadius:14,padding:18,marginBottom:16,border:"1px solid #EA580C55"}}>
             <div style={{fontSize:11,color:"#FDBA74",marginBottom:2}}>🔥 BRUCIATE · {fmtDate(selectedDate).toUpperCase()}</div>
             <div style={{fontSize:32,fontWeight:800,color:"#FB923C",lineHeight:1}}>{burned} <span style={{fontSize:16,color:"#9A3412",fontWeight:600}}>kcal</span></div>
-            {totals.kcal>0&&<div style={{fontSize:12,color:"#94A3B8",marginTop:6}}>Introdotte {Math.round(totals.kcal)} − bruciate {burned} = <strong style={{color:"#A78BFA"}}>{Math.round(netKcal)} kcal nette</strong></div>}
+            {totals.kcal>0&&<div style={{fontSize:12,color:"var(--text-soft)",marginTop:6}}>Introdotte {Math.round(totals.kcal)} − bruciate {burned} = <strong style={{color:"#A78BFA"}}>{Math.round(netKcal)} kcal nette</strong></div>}
           </div>
-          <div style={{background:"#1E293B",borderRadius:12,padding:16,marginBottom:16,border:"1px solid #334155"}}>
-            <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"#F1F5F9"}}>Aggiungi allenamento</h3>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>{WORKOUT_TYPES.map(w=>(<button key={w.id} onClick={()=>{setWoType(w.id);if(!woKcal)setWoKcal(String(w.est));}} style={{padding:"7px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:woType===w.id?"linear-gradient(135deg,#EA580C,#C2410C)":"#0F172A",color:woType===w.id?"#fff":"#94A3B8",outline:woType===w.id?"none":"1px solid #334155"}}>{w.icon} {w.label}</button>))}</div>
+          <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:16,border:"1px solid var(--border)"}}>
+            <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>Aggiungi allenamento</h3>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>{WORKOUT_TYPES.map(w=>(<button key={w.id} onClick={()=>{setWoType(w.id);if(!woKcal)setWoKcal(String(w.est));}} style={{padding:"7px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:woType===w.id?"linear-gradient(135deg,#EA580C,#C2410C)":"var(--bg)",color:woType===w.id?"#fff":"var(--text-soft)",outline:woType===w.id?"none":"1px solid var(--border)"}}>{w.icon} {w.label}</button>))}</div>
             <div style={{display:"flex",gap:8,marginBottom:8,flexWrap:"wrap"}}>
-              <div style={{flex:"1 1 120px"}}><label style={{fontSize:11,color:"#64748B",display:"block",marginBottom:4}}>Kcal bruciate (Apple Watch)</label><input type="number" value={woKcal} onChange={e=>setWoKcal(e.target.value)} placeholder="es. 580" style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div>
-              <div style={{flex:"1 1 100px"}}><label style={{fontSize:11,color:"#64748B",display:"block",marginBottom:4}}>Durata (min)</label><input type="number" value={woDur} onChange={e=>setWoDur(e.target.value)} placeholder="es. 90" style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div>
+              <div style={{flex:"1 1 120px"}}><label style={{fontSize:11,color:"var(--text-dim)",display:"block",marginBottom:4}}>Kcal bruciate (Apple Watch)</label><input type="number" value={woKcal} onChange={e=>setWoKcal(e.target.value)} placeholder="es. 580" style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div>
+              <div style={{flex:"1 1 100px"}}><label style={{fontSize:11,color:"var(--text-dim)",display:"block",marginBottom:4}}>Durata (min)</label><input type="number" value={woDur} onChange={e=>setWoDur(e.target.value)} placeholder="es. 90" style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div>
             </div>
-            <input value={woNote} onChange={e=>setWoNote(e.target.value)} placeholder="Nota (facoltativa)" style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:10}}/>
+            <input value={woNote} onChange={e=>setWoNote(e.target.value)} placeholder="Nota (facoltativa)" style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:10}}/>
             <button onClick={addWorkout} style={{width:"100%",padding:"11px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#EA580C,#C2410C)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14}}>🔥 Registra</button>
           </div>
-          {workouts.length===0?<div style={{background:"#1E293B",borderRadius:12,padding:24,textAlign:"center",border:"1px solid #334155",color:"#64748B"}}><div style={{fontSize:28,marginBottom:6}}>🏋️</div>Nessun allenamento per questo giorno.</div>:workouts.map(w=>(<div key={w.id} style={{background:"#1E293B",borderRadius:12,marginBottom:8,padding:"13px 16px",border:"1px solid #334155",display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:24}}>{w.icon}</span><div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"#F1F5F9"}}>{w.label}{w.dur?` · ${w.dur} min`:""}</div>{w.note&&<div style={{fontSize:11,color:"#64748B"}}>{w.note}</div>}</div><span style={{fontSize:15,fontWeight:800,color:"#FB923C"}}>−{w.kcal}</span><button onClick={()=>removeWorkout(w.id)} style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:16,padding:4}}>×</button></div>))}
+          {workouts.length===0?<div style={{background:"var(--surface)",borderRadius:12,padding:24,textAlign:"center",border:"1px solid var(--border)",color:"var(--text-dim)"}}><div style={{fontSize:28,marginBottom:6}}>🏋️</div>Nessun allenamento per questo giorno.</div>:workouts.map(w=>(<div key={w.id} style={{background:"var(--surface)",borderRadius:12,marginBottom:8,padding:"13px 16px",border:"1px solid var(--border)",display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:24}}>{w.icon}</span><div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>{w.label}{w.dur?` · ${w.dur} min`:""}</div>{w.note&&<div style={{fontSize:11,color:"var(--text-dim)"}}>{w.note}</div>}</div><span style={{fontSize:15,fontWeight:800,color:"#FB923C"}}>−{w.kcal}</span><button onClick={()=>removeWorkout(w.id)} style={{background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",fontSize:16,padding:4}}>×</button></div>))}
         </>)}
 
         {/* ===== SYNC ===== */}
-        {tab==="sync"&&<SyncView syncState={syncState} setSyncState={setSyncState} applyPayload={applyPayload}/>}
+        {tab==="sync"&&<SyncView syncState={syncState} setSyncState={setSyncState} applyPayload={applyPayload} theme={theme} setTheme={setTheme}/>}
 
         {/* ===== COACH ===== */}
         {tab==="coach"&&<CoachView days={days} plans={plans} weights={weights} setTab={setTab}/>}
@@ -557,17 +583,17 @@ function AppInner(){
         {/* ===== STORICO ===== */}
         {tab==="storico"&&(<>
           {(()=>{const last7=historyKeys.slice(0,7);if(!last7.length)return null;const tot=last7.reduce((a,k)=>{const s=sum(Object.values(days[k].logs||{}).flat());const b=(days[k].workouts||[]).reduce((x,w)=>x+w.kcal,0);return{kcal:a.kcal+s.kcal,p:a.p+s.p,c:a.c+s.c,f:a.f+s.f,b:a.b+b};},{kcal:0,p:0,c:0,f:0,b:0});const n=last7.length;return(
-            <div style={{background:"linear-gradient(135deg,#1E3A5F,#1E293B)",borderRadius:14,padding:18,marginBottom:16,border:"1px solid #1D4ED8"}}>
+            <div style={{background:"linear-gradient(135deg,var(--header-from),var(--surface))",borderRadius:14,padding:18,marginBottom:16,border:"1px solid var(--accent-deep)"}}>
               <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"#93C5FD"}}>📈 Media ultimi {n} giorni</h3>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>{[["Kcal",Math.round(tot.kcal/n),"#60A5FA"],["Prot",Math.round(tot.p/n),"#3B82F6"],["Carb",Math.round(tot.c/n),"#F59E0B"],["Grassi",Math.round(tot.f/n),"#10B981"],["🔥Bruc",Math.round(tot.b/n),"#FB923C"]].map(([k,v,c])=>(<div key={k} style={{background:"#0F172A55",borderRadius:8,padding:"10px 6px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"#64748B"}}>{k}</div></div>))}</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>{[["Kcal",Math.round(tot.kcal/n),"var(--accent-light)"],["Prot",Math.round(tot.p/n),"var(--accent)"],["Carb",Math.round(tot.c/n),"#F59E0B"],["Grassi",Math.round(tot.f/n),"#10B981"],["🔥Bruc",Math.round(tot.b/n),"#FB923C"]].map(([k,v,c])=>(<div key={k} style={{background:"var(--bg)55",borderRadius:8,padding:"10px 6px",textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{k}</div></div>))}</div>
             </div>);})()}
-          {historyKeys.length===0?<div style={{background:"#1E293B",borderRadius:12,padding:30,textAlign:"center",border:"1px solid #334155"}}><div style={{fontSize:32,marginBottom:8}}>📅</div><p style={{margin:0,fontSize:14,color:"#94A3B8"}}>Nessun giorno registrato ancora.</p></div>:historyKeys.map(key=>{const d=days[key],t=sum(Object.values(d.logs||{}).flat());const pl=planForDate(plans,key);const tgt=pl?(d.dayType==="padel"?pl.sport.kcal:pl.targetKcal):2000;const kp=pct(t.kcal,tgt);const b=(d.workouts||[]).reduce((a,w)=>a+w.kcal,0),dowH=new Date(key+"T12:00:00").getDay(),wasFree=pl&&(pl.freeMeals?.[dowH]||[]).length>0;return(
-            <div key={key} onClick={()=>{setSelectedDate(key);setTab("oggi");setOpenSlot("colazione");}} style={{background:"#1E293B",borderRadius:12,marginBottom:10,padding:"14px 16px",border:"1px solid #334155",cursor:"pointer"}}>
+          {historyKeys.length===0?<div style={{background:"var(--surface)",borderRadius:12,padding:30,textAlign:"center",border:"1px solid var(--border)"}}><div style={{fontSize:32,marginBottom:8}}>📅</div><p style={{margin:0,fontSize:14,color:"var(--text-soft)"}}>Nessun giorno registrato ancora.</p></div>:historyKeys.map(key=>{const d=days[key],t=sum(Object.values(d.logs||{}).flat());const pl=planForDate(plans,key);const tgt=pl?(d.dayType==="padel"?pl.sport.kcal:pl.targetKcal):2000;const kp=pct(t.kcal,tgt);const b=(d.workouts||[]).reduce((a,w)=>a+w.kcal,0),dowH=new Date(key+"T12:00:00").getDay(),wasFree=pl&&(pl.freeMeals?.[dowH]||[]).length>0;return(
+            <div key={key} onClick={()=>{setSelectedDate(key);setTab("oggi");setOpenSlot("colazione");}} style={{background:"var(--surface)",borderRadius:12,marginBottom:10,padding:"14px 16px",border:"1px solid var(--border)",cursor:"pointer"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div><div style={{fontSize:14,fontWeight:700,color:"#F1F5F9"}}>{fmtDate(key)}{d.dayType==="padel"&&<span style={{marginLeft:6}}>🎾</span>}{wasFree&&<span style={{marginLeft:6}}>🎉</span>}{b>0&&<span style={{marginLeft:6,fontSize:11,color:"#FB923C"}}>🔥{b}</span>}</div><div style={{fontSize:11,color:"#64748B",marginTop:2}}>P:{Math.round(t.p)}g · C:{Math.round(t.c)}g · F:{Math.round(t.f)}g</div></div>
-                <div style={{textAlign:"right"}}><div style={{fontSize:17,fontWeight:800,color:kp>110?"#F87171":kp<70?"#FBBF24":"#34D399"}}>{Math.round(t.kcal)}</div><div style={{fontSize:10,color:"#64748B"}}>/ {tgt} kcal</div></div>
+                <div><div style={{fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>{fmtDate(key)}{d.dayType==="padel"&&<span style={{marginLeft:6}}>🎾</span>}{wasFree&&<span style={{marginLeft:6}}>🎉</span>}{b>0&&<span style={{marginLeft:6,fontSize:11,color:"#FB923C"}}>🔥{b}</span>}</div><div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>P:{Math.round(t.p)}g · C:{Math.round(t.c)}g · F:{Math.round(t.f)}g</div></div>
+                <div style={{textAlign:"right"}}><div style={{fontSize:17,fontWeight:800,color:kp>110?"#F87171":kp<70?"#FBBF24":"#34D399"}}>{Math.round(t.kcal)}</div><div style={{fontSize:10,color:"var(--text-dim)"}}>/ {tgt} kcal</div></div>
               </div>
-              <div style={{height:6,background:"#0F172A",borderRadius:3,overflow:"hidden",marginTop:10}}><div style={{height:"100%",width:`${Math.min(kp,100)}%`,background:kp>110?"#F87171":kp<70?"#FBBF24":"linear-gradient(90deg,#3B82F6,#06B6D4)",borderRadius:3}}/></div>
+              <div style={{height:6,background:"var(--bg)",borderRadius:3,overflow:"hidden",marginTop:10}}><div style={{height:"100%",width:`${Math.min(kp,100)}%`,background:kp>110?"#F87171":kp<70?"#FBBF24":"linear-gradient(90deg,var(--accent),var(--accent-2))",borderRadius:3}}/></div>
             </div>);})}
         </>)}
       </div>
@@ -575,17 +601,17 @@ function AppInner(){
       {/* ===== MODALE MENÙ DEL GIORNO ===== */}
       {menu&&(
         <div onClick={()=>setMenu(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#1E293B",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,maxHeight:"90vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
-            <div style={{padding:"16px 16px 12px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"var(--surface)",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,maxHeight:"90vh",display:"flex",flexDirection:"column",border:"1px solid var(--border)"}}>
+            <div style={{padding:"16px 16px 12px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
-                <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"#F1F5F9"}}>🍽️ Menù suggerito · {DOW_FULL[menu.dayIdx]}</h3>
-                <div style={{fontSize:11,color:"#64748B",marginTop:2}}>Target {dayType==="padel"?menu.plan.sport.kcal:menu.plan.targetKcal} kcal {dayType==="padel"?"🎾":""} · pranzo da ufficio</div>
+                <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"var(--text-strong)"}}>🍽️ Menù suggerito · {DOW_FULL[menu.dayIdx]}</h3>
+                <div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>Target {dayType==="padel"?menu.plan.sport.kcal:menu.plan.targetKcal} kcal {dayType==="padel"?"🎾":""} · pranzo da ufficio</div>
               </div>
-              <button onClick={()=>setMenu(null)} style={{background:"none",border:"none",color:"#64748B",fontSize:22,cursor:"pointer"}}>×</button>
+              <button onClick={()=>setMenu(null)} style={{background:"none",border:"none",color:"var(--text-dim)",fontSize:22,cursor:"pointer"}}>×</button>
             </div>
             <div style={{overflowY:"auto",padding:"14px 16px 24px"}}>
               {!menu.data&&!menu.loading&&!menu.error&&(<>
-                <p style={{margin:"0 0 14px",fontSize:13,color:"#94A3B8",lineHeight:1.5}}>Genero una proposta di 5 pasti su misura dei tuoi target e preferenze (yogurt greco, niente latte, pranzo trasportabile in ufficio). Cambia ogni volta.</p>
+                <p style={{margin:"0 0 14px",fontSize:13,color:"var(--text-soft)",lineHeight:1.5}}>Genero una proposta di 5 pasti su misura dei tuoi target e preferenze (yogurt greco, niente latte, pranzo trasportabile in ufficio). Cambia ogni volta.</p>
                 <button onClick={()=>fetchMenu(menu.plan,menu.dayIdx)} style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#7C3AED,#5B21B6)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14}}>✨ Genera menù</button>
               </>)}
 
@@ -594,7 +620,7 @@ function AppInner(){
               {menu.error&&!menu.loading&&(
                 <div style={{background:"#3B1212",border:"1px solid #7F1D1D",borderRadius:8,padding:"12px 14px",fontSize:12,color:"#FCA5A5"}}>
                   {menu.error}
-                  <button onClick={()=>fetchMenu(menu.plan,menu.dayIdx)} style={{display:"block",marginTop:10,padding:"7px 12px",borderRadius:6,border:"1px solid #475569",background:"transparent",color:"#C4B5FD",cursor:"pointer",fontSize:12}}>Riprova</button>
+                  <button onClick={()=>fetchMenu(menu.plan,menu.dayIdx)} style={{display:"block",marginTop:10,padding:"7px 12px",borderRadius:6,border:"1px solid var(--muted)",background:"transparent",color:"#C4B5FD",cursor:"pointer",fontSize:12}}>Riprova</button>
                 </div>
               )}
 
@@ -602,35 +628,35 @@ function AppInner(){
                 {[["colazione","☀️ Colazione"],["spuntino_mattina","🍎 Spuntino mattino"],["pranzo","🥗 Pranzo (ufficio)"],["spuntino_pomeriggio","🍵 Spuntino pomeriggio"],["cena","🌙 Cena"]].map(([key,label])=>{
                   const m=menu.data.meals?.[key]; if(!m)return null;
                   return (
-                    <div key={key} style={{background:"#0F172A",borderRadius:10,padding:14,marginBottom:10,border:"1px solid #334155"}}>
+                    <div key={key} style={{background:"var(--bg)",borderRadius:10,padding:14,marginBottom:10,border:"1px solid var(--border)"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8,gap:8}}>
                         <div style={{flex:1}}>
-                          <div style={{fontSize:11,color:"#64748B",marginBottom:2}}>{label}</div>
-                          <div style={{fontSize:14,fontWeight:700,color:"#F1F5F9"}}>{m.titolo}</div>
+                          <div style={{fontSize:11,color:"var(--text-dim)",marginBottom:2}}>{label}</div>
+                          <div style={{fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>{m.titolo}</div>
                         </div>
                         <div style={{textAlign:"right",whiteSpace:"nowrap"}}>
-                          <div style={{fontSize:15,fontWeight:800,color:"#60A5FA"}}>{m.kcal}</div>
-                          <div style={{fontSize:9,color:"#64748B"}}>kcal</div>
+                          <div style={{fontSize:15,fontWeight:800,color:"var(--accent-light)"}}>{m.kcal}</div>
+                          <div style={{fontSize:9,color:"var(--text-dim)"}}>kcal</div>
                         </div>
                       </div>
-                      {m.ingredienti?.length>0&&<div style={{fontSize:12,color:"#CBD5E1",marginBottom:6}}>{m.ingredienti.map(i=>`${i.nome} ${i.grammi}g`).join(" · ")}</div>}
-                      {m.prep&&<div style={{fontSize:11,color:"#94A3B8",fontStyle:"italic",marginBottom:8}}>👨‍🍳 {m.prep}</div>}
+                      {m.ingredienti?.length>0&&<div style={{fontSize:12,color:"var(--text)",marginBottom:6}}>{m.ingredienti.map(i=>`${i.nome} ${i.grammi}g`).join(" · ")}</div>}
+                      {m.prep&&<div style={{fontSize:11,color:"var(--text-soft)",fontStyle:"italic",marginBottom:8}}>👨‍🍳 {m.prep}</div>}
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
-                        <span style={{fontSize:10,color:"#3B82F6"}}>P {m.p}g</span><span style={{fontSize:10,color:"#F59E0B"}}>C {m.c}g</span><span style={{fontSize:10,color:"#10B981"}}>F {m.f}g</span>
-                        <button onClick={()=>addMenuMeal(key,m)} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:6,border:"1px solid #334155",background:"transparent",color:"#60A5FA",cursor:"pointer",fontSize:11,fontWeight:700}}>+ Aggiungi al diario</button>
+                        <span style={{fontSize:10,color:"var(--accent)"}}>P {m.p}g</span><span style={{fontSize:10,color:"#F59E0B"}}>C {m.c}g</span><span style={{fontSize:10,color:"#10B981"}}>F {m.f}g</span>
+                        <button onClick={()=>addMenuMeal(key,m)} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:6,border:"1px solid var(--border)",background:"transparent",color:"var(--accent-light)",cursor:"pointer",fontSize:11,fontWeight:700}}>+ Aggiungi al diario</button>
                       </div>
                     </div>
                   );
                 })}
                 {(()=>{const t=Object.values(menu.data.meals||{}).reduce((a,m)=>({k:a.k+(m.kcal||0),p:a.p+(m.p||0),c:a.c+(m.c||0),f:a.f+(m.f||0)}),{k:0,p:0,c:0,f:0});return(
-                  <div style={{background:"#1E293B",borderRadius:10,padding:"10px 14px",marginBottom:12,border:"1px solid #334155",display:"flex",justifyContent:"space-around",textAlign:"center"}}>
-                    {[["Totale",t.k,"#60A5FA","kcal"],["Prot",t.p,"#3B82F6","g"],["Carb",t.c,"#F59E0B","g"],["Grassi",t.f,"#10B981","g"]].map(([l,v,c,u])=>(<div key={l}><div style={{fontSize:15,fontWeight:800,color:c}}>{Math.round(v)}</div><div style={{fontSize:9,color:"#64748B"}}>{l} ({u})</div></div>))}
+                  <div style={{background:"var(--surface)",borderRadius:10,padding:"10px 14px",marginBottom:12,border:"1px solid var(--border)",display:"flex",justifyContent:"space-around",textAlign:"center"}}>
+                    {[["Totale",t.k,"var(--accent-light)","kcal"],["Prot",t.p,"var(--accent)","g"],["Carb",t.c,"#F59E0B","g"],["Grassi",t.f,"#10B981","g"]].map(([l,v,c,u])=>(<div key={l}><div style={{fontSize:15,fontWeight:800,color:c}}>{Math.round(v)}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{l} ({u})</div></div>))}
                   </div>
                 );})()}
-                {menu.data.nota&&<div style={{fontSize:11,color:"#94A3B8",lineHeight:1.5,marginBottom:12,padding:"0 4px"}}>💡 {menu.data.nota}</div>}
+                {menu.data.nota&&<div style={{fontSize:11,color:"var(--text-soft)",lineHeight:1.5,marginBottom:12,padding:"0 4px"}}>💡 {menu.data.nota}</div>}
                 <button onClick={()=>addAllMenu(menu.data)} style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#059669,#047857)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14}}>✓ Aggiungi tutto il menù al diario</button>
-                <button onClick={()=>fetchMenu(menu.plan,menu.dayIdx)} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:12,marginTop:8}}>🔄 Genera un'altra proposta</button>
-                <div style={{fontSize:10,color:"#475569",marginTop:10,textAlign:"center",lineHeight:1.4}}>Le ricette sono suggerimenti generati: verifica porzioni e adatta ai tuoi gusti. I valori sono indicativi.</div>
+                <button onClick={()=>fetchMenu(menu.plan,menu.dayIdx)} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--text-soft)",cursor:"pointer",fontSize:12,marginTop:8}}>🔄 Genera un'altra proposta</button>
+                <div style={{fontSize:10,color:"var(--muted)",marginTop:10,textAlign:"center",lineHeight:1.4}}>Le ricette sono suggerimenti generati: verifica porzioni e adatta ai tuoi gusti. I valori sono indicativi.</div>
               </>)}
             </div>
           </div>
@@ -640,18 +666,18 @@ function AppInner(){
       {/* ===== MODALE STIMA PIATTO ===== */}
       {estimate&&(
         <div onClick={()=>setEstimate(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#1E293B",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,maxHeight:"88vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
-            <div style={{padding:"16px 16px 12px",borderBottom:"1px solid #334155",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"#F1F5F9"}}>✨ Stima piatto · {MEAL_SLOTS.find(m=>m.id===estimate.slot)?.label}</h3>
-              <button onClick={()=>setEstimate(null)} style={{background:"none",border:"none",color:"#64748B",fontSize:22,cursor:"pointer"}}>×</button>
+          <div onClick={e=>e.stopPropagation()} style={{background:"var(--surface)",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,maxHeight:"88vh",display:"flex",flexDirection:"column",border:"1px solid var(--border)"}}>
+            <div style={{padding:"16px 16px 12px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"var(--text-strong)"}}>✨ Stima piatto · {MEAL_SLOTS.find(m=>m.id===estimate.slot)?.label}</h3>
+              <button onClick={()=>setEstimate(null)} style={{background:"none",border:"none",color:"var(--text-dim)",fontSize:22,cursor:"pointer"}}>×</button>
             </div>
             <div style={{overflowY:"auto",padding:"14px 16px 24px"}}>
               {/* fase scelta / input */}
               {estimate.rows.length===0&&!estimate.loading&&(<>
-                <p style={{margin:"0 0 10px",fontSize:12,color:"#94A3B8",lineHeight:1.5}}>Descrivi il piatto con i grammi indicativi, oppure scatta/carica una foto. Otterrai una lista di ingredienti modificabile.</p>
-                <textarea value={estimate.contextText} onChange={e=>setEstimate(es=>({...es,contextText:e.target.value}))} rows={3} placeholder="es: stracotto di vitello al vino ~200g, patate al forno 100g" style={{width:"100%",padding:"11px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:14,outline:"none",boxSizing:"border-box",resize:"vertical",marginBottom:10}}/>
-                <button onClick={doEstimateText} disabled={!estimate.contextText.trim()} style={{width:"100%",padding:"11px",borderRadius:8,border:"none",background:estimate.contextText.trim()?"linear-gradient(135deg,#7C3AED,#5B21B6)":"#334155",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,marginBottom:12}}>Stima dal testo</button>
-                <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0 12px"}}><div style={{flex:1,height:1,background:"#334155"}}/><span style={{fontSize:11,color:"#64748B"}}>oppure</span><div style={{flex:1,height:1,background:"#334155"}}/></div>
+                <p style={{margin:"0 0 10px",fontSize:12,color:"var(--text-soft)",lineHeight:1.5}}>Descrivi il piatto con i grammi indicativi, oppure scatta/carica una foto. Otterrai una lista di ingredienti modificabile.</p>
+                <textarea value={estimate.contextText} onChange={e=>setEstimate(es=>({...es,contextText:e.target.value}))} rows={3} placeholder="es: stracotto di vitello al vino ~200g, patate al forno 100g" style={{width:"100%",padding:"11px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:14,outline:"none",boxSizing:"border-box",resize:"vertical",marginBottom:10}}/>
+                <button onClick={doEstimateText} disabled={!estimate.contextText.trim()} style={{width:"100%",padding:"11px",borderRadius:8,border:"none",background:estimate.contextText.trim()?"linear-gradient(135deg,#7C3AED,#5B21B6)":"var(--border)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,marginBottom:12}}>Stima dal testo</button>
+                <div style={{display:"flex",alignItems:"center",gap:10,margin:"4px 0 12px"}}><div style={{flex:1,height:1,background:"var(--border)"}}/><span style={{fontSize:11,color:"var(--text-dim)"}}>oppure</span><div style={{flex:1,height:1,background:"var(--border)"}}/></div>
                 <label style={{display:"block",width:"100%",padding:"11px",borderRadius:8,border:"1px dashed #6D28D9",background:"#2E1065",color:"#C4B5FD",fontWeight:700,fontSize:14,textAlign:"center",cursor:"pointer",boxSizing:"border-box"}}>
                   📷 Scatta o carica una foto
                   <input type="file" accept="image/*" capture="environment" onChange={e=>doEstimatePhoto(e.target.files?.[0])} style={{display:"none"}}/>
@@ -668,8 +694,8 @@ function AppInner(){
               {estimate.error&&!estimate.loading&&(
                 <div style={{background:"#3B1212",border:"1px solid #7F1D1D",borderRadius:8,padding:"12px 14px",fontSize:12,color:"#FCA5A5"}}>
                   {estimate.error}
-                  <div style={{marginTop:10,color:"#94A3B8"}}>Puoi sempre inserire i valori a mano: chiudi e usa il campo di testo del pasto o "➕ alimento personalizzato".</div>
-                  <button onClick={()=>setEstimate(es=>({...es,error:null,rows:[]}))} style={{marginTop:10,padding:"7px 12px",borderRadius:6,border:"1px solid #475569",background:"transparent",color:"#C4B5FD",cursor:"pointer",fontSize:12}}>Riprova</button>
+                  <div style={{marginTop:10,color:"var(--text-soft)"}}>Puoi sempre inserire i valori a mano: chiudi e usa il campo di testo del pasto o "➕ alimento personalizzato".</div>
+                  <button onClick={()=>setEstimate(es=>({...es,error:null,rows:[]}))} style={{marginTop:10,padding:"7px 12px",borderRadius:6,border:"1px solid var(--muted)",background:"transparent",color:"#C4B5FD",cursor:"pointer",fontSize:12}}>Riprova</button>
                 </div>
               )}
 
@@ -688,25 +714,25 @@ function AppInner(){
                 {estimate.fromPhoto&&estimate.scaleObjectFound===true&&(
                   <div style={{background:"#0F2A1E",border:"1px solid #059669",borderRadius:8,padding:"8px 12px",marginBottom:10,fontSize:11,color:"#6EE7B7"}}>📏 Oggetto di scala riconosciuto: stima dei pesi più attendibile (ma sempre da verificare).</div>
                 )}
-                <div style={{fontSize:11,color:"#64748B",marginBottom:8}}>Rivedi e correggi ogni riga, poi inseriscile nel diario.</div>
+                <div style={{fontSize:11,color:"var(--text-dim)",marginBottom:8}}>Rivedi e correggi ogni riga, poi inseriscile nel diario.</div>
                 {estimate.rows.map((r,i)=>{
                   const confColor={alta:"#34D399",media:"#FBBF24",bassa:"#F87171"}[r.confidence];
                   const fct=r.grams/100;
                   return (
-                    <div key={i} style={{background:"#0F172A",borderRadius:10,padding:12,marginBottom:8,border:"1px solid #334155",opacity:r.include?1:0.45}}>
+                    <div key={i} style={{background:"var(--bg)",borderRadius:10,padding:12,marginBottom:8,border:"1px solid var(--border)",opacity:r.include?1:0.45}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
                         <input type="checkbox" checked={r.include} onChange={e=>updateRow(i,{include:e.target.checked})} style={{width:18,height:18,accentColor:"#7C3AED"}}/>
-                        <input value={r.name} onChange={e=>updateRow(i,{name:e.target.value})} style={{flex:1,padding:"7px 9px",borderRadius:6,border:"1px solid #334155",background:"#1E293B",color:"#E2E8F0",fontSize:13,outline:"none"}}/>
-                        <span style={{fontSize:10,fontWeight:700,color:confColor,background:"#1E293B",borderRadius:6,padding:"3px 7px",whiteSpace:"nowrap"}}>{r.confidence}</span>
+                        <input value={r.name} onChange={e=>updateRow(i,{name:e.target.value})} style={{flex:1,padding:"7px 9px",borderRadius:6,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,outline:"none"}}/>
+                        <span style={{fontSize:10,fontWeight:700,color:confColor,background:"var(--surface)",borderRadius:6,padding:"3px 7px",whiteSpace:"nowrap"}}>{r.confidence}</span>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:6}}>
-                        <input type="number" value={r.grams} onChange={e=>updateRow(i,{grams:Math.max(0,parseInt(e.target.value)||0)})} style={{width:64,padding:"6px 8px",borderRadius:6,border:"1px solid #334155",background:"#1E293B",color:"#E2E8F0",fontSize:13,outline:"none"}}/>
-                        <span style={{fontSize:11,color:"#64748B"}}>g →</span>
-                        <span style={{fontSize:13,color:"#60A5FA",fontWeight:700}}>{Math.round(r.kcal100*fct)} kcal</span>
-                        <span style={{fontSize:11,color:"#64748B"}}>P{(r.p100*fct).toFixed(1)} C{(r.c100*fct).toFixed(1)} F{(r.f100*fct).toFixed(1)}</span>
+                        <input type="number" value={r.grams} onChange={e=>updateRow(i,{grams:Math.max(0,parseInt(e.target.value)||0)})} style={{width:64,padding:"6px 8px",borderRadius:6,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--text)",fontSize:13,outline:"none"}}/>
+                        <span style={{fontSize:11,color:"var(--text-dim)"}}>g →</span>
+                        <span style={{fontSize:13,color:"var(--accent-light)",fontWeight:700}}>{Math.round(r.kcal100*fct)} kcal</span>
+                        <span style={{fontSize:11,color:"var(--text-dim)"}}>P{(r.p100*fct).toFixed(1)} C{(r.c100*fct).toFixed(1)} F{(r.f100*fct).toFixed(1)}</span>
                       </div>
-                      <div style={{fontSize:10,color:"#475569",marginBottom:6}}>per 100g: {r.kcal100}kcal · P{r.p100} C{r.c100} F{r.f100}{r.note?` · ${r.note}`:""}</div>
-                      <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#94A3B8",cursor:"pointer"}}>
+                      <div style={{fontSize:10,color:"var(--muted)",marginBottom:6}}>per 100g: {r.kcal100}kcal · P{r.p100} C{r.c100} F{r.f100}{r.note?` · ${r.note}`:""}</div>
+                      <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"var(--text-soft)",cursor:"pointer"}}>
                         <input type="checkbox" checked={!!r.saveCustom} onChange={e=>updateRow(i,{saveCustom:e.target.checked})} style={{accentColor:"#D97706"}}/>
                         Salva come alimento personalizzato ⭐ (riutilizzabile)
                       </label>
@@ -714,7 +740,7 @@ function AppInner(){
                   );
                 })}
                 <button onClick={insertEstimateRows} style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#059669,#047857)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,marginTop:6}}>✓ Inserisci {estimate.rows.filter(r=>r.include).length} voci nel diario</button>
-                <button onClick={()=>setEstimate(es=>({...es,rows:[],error:null}))} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#64748B",cursor:"pointer",fontSize:12,marginTop:8}}>↺ Rifai la stima</button>
+                <button onClick={()=>setEstimate(es=>({...es,rows:[],error:null}))} style={{width:"100%",padding:"9px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--text-dim)",cursor:"pointer",fontSize:12,marginTop:8}}>↺ Rifai la stima</button>
               </>)}
             </div>
           </div>
@@ -724,22 +750,22 @@ function AppInner(){
       {/* ===== MODALE NUOVO ALIMENTO ===== */}
       {newFood&&(
         <div onClick={()=>setNewFood(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#1E293B",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,padding:"16px 16px 28px",border:"1px solid #334155"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"var(--surface)",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,padding:"16px 16px 28px",border:"1px solid var(--border)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-              <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"#F1F5F9"}}>➕ Nuovo alimento personalizzato</h3>
-              <button onClick={()=>setNewFood(null)} style={{background:"none",border:"none",color:"#64748B",fontSize:22,cursor:"pointer"}}>×</button>
+              <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"var(--text-strong)"}}>➕ Nuovo alimento personalizzato</h3>
+              <button onClick={()=>setNewFood(null)} style={{background:"none",border:"none",color:"var(--text-dim)",fontSize:22,cursor:"pointer"}}>×</button>
             </div>
-            <p style={{margin:"0 0 14px",fontSize:11,color:"#64748B",lineHeight:1.5}}>Copia i valori <strong>per 100g</strong> dall'etichetta o da una tabella nutrizionale. Lo salverai una volta sola: poi basterà scriverne il nome.</p>
-            <label style={{fontSize:11,color:"#94A3B8",display:"block",marginBottom:4}}>Nome (come lo scriverai nei pasti)</label>
-            <input value={newFood.name} onChange={e=>setNewFood(f=>({...f,name:e.target.value}))} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:14,outline:"none",boxSizing:"border-box",marginBottom:10}}/>
+            <p style={{margin:"0 0 14px",fontSize:11,color:"var(--text-dim)",lineHeight:1.5}}>Copia i valori <strong>per 100g</strong> dall'etichetta o da una tabella nutrizionale. Lo salverai una volta sola: poi basterà scriverne il nome.</p>
+            <label style={{fontSize:11,color:"var(--text-soft)",display:"block",marginBottom:4}}>Nome (come lo scriverai nei pasti)</label>
+            <input value={newFood.name} onChange={e=>setNewFood(f=>({...f,name:e.target.value}))} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:14,outline:"none",boxSizing:"border-box",marginBottom:10}}/>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
               {[["kcal","Kcal/100g"],["p","Prot/100g"],["c","Carb/100g"],["f","Grassi/100g"]].map(([k,l])=>(
-                <div key={k}><label style={{fontSize:10,color:"#94A3B8",display:"block",marginBottom:4}}>{l}</label>
-                <input inputMode="decimal" value={newFood[k]} onChange={e=>setNewFood(f=>({...f,[k]:e.target.value}))} style={{width:"100%",padding:"9px 8px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
+                <div key={k}><label style={{fontSize:10,color:"var(--text-soft)",display:"block",marginBottom:4}}>{l}</label>
+                <input inputMode="decimal" value={newFood[k]} onChange={e=>setNewFood(f=>({...f,[k]:e.target.value}))} style={{width:"100%",padding:"9px 8px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none",boxSizing:"border-box"}}/></div>
               ))}
             </div>
-            <label style={{fontSize:11,color:"#94A3B8",display:"block",marginBottom:4}}>Quanti grammi aggiungere ora al pasto</label>
-            <input inputMode="decimal" value={newFood.grams} onChange={e=>setNewFood(f=>({...f,grams:e.target.value}))} style={{width:120,padding:"9px 10px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,outline:"none",marginBottom:14}}/>
+            <label style={{fontSize:11,color:"var(--text-soft)",display:"block",marginBottom:4}}>Quanti grammi aggiungere ora al pasto</label>
+            <input inputMode="decimal" value={newFood.grams} onChange={e=>setNewFood(f=>({...f,grams:e.target.value}))} style={{width:120,padding:"9px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none",marginBottom:14}}/>
             <button onClick={()=>{
               const name=newFood.name.trim().toLowerCase();
               const kcal=parseFloat(String(newFood.kcal).replace(",","."));
@@ -754,7 +780,7 @@ function AppInner(){
               updateDay({logs:{...logs,[newFood.slot]:[...(logs[newFood.slot]||[]),{label:entry.label,grams:Math.round(grams),kcal:Math.round(kcal*fct),p:+(p*fct).toFixed(1),c:+(c*fct).toFixed(1),f:+(f*fct).toFixed(1)}]}});
               setWarnings(w=>({...w,[newFood.slot]:[]}));
               setNewFood(null);
-            }} disabled={!newFood.name.trim()||!parseFloat(String(newFood.kcal).replace(",","."))} style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:(newFood.name.trim()&&parseFloat(String(newFood.kcal).replace(",",".")))?"linear-gradient(135deg,#059669,#047857)":"#334155",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14}}>✓ Salva e aggiungi al pasto</button>
+            }} disabled={!newFood.name.trim()||!parseFloat(String(newFood.kcal).replace(",","."))} style={{width:"100%",padding:"12px",borderRadius:8,border:"none",background:(newFood.name.trim()&&parseFloat(String(newFood.kcal).replace(",",".")))?"linear-gradient(135deg,#059669,#047857)":"var(--border)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14}}>✓ Salva e aggiungi al pasto</button>
           </div>
         </div>
       )}
@@ -762,22 +788,22 @@ function AppInner(){
       {/* ===== MODALE RICERCA PRODOTTO ===== */}
       {searchSlot&&(
         <div onClick={()=>setSearchSlot(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:100}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#1E293B",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,maxHeight:"85vh",display:"flex",flexDirection:"column",border:"1px solid #334155"}}>
-            <div style={{padding:"16px 16px 12px",borderBottom:"1px solid #334155"}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"var(--surface)",borderRadius:"16px 16px 0 0",width:"100%",maxWidth:720,maxHeight:"85vh",display:"flex",flexDirection:"column",border:"1px solid var(--border)"}}>
+            <div style={{padding:"16px 16px 12px",borderBottom:"1px solid var(--border)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"#F1F5F9"}}>🔍 Cerca prodotto · {MEAL_SLOTS.find(m=>m.id===searchSlot)?.label}</h3>
-                <button onClick={()=>setSearchSlot(null)} style={{background:"none",border:"none",color:"#64748B",fontSize:22,cursor:"pointer"}}>×</button>
+                <h3 style={{margin:0,fontSize:15,fontWeight:700,color:"var(--text-strong)"}}>🔍 Cerca prodotto · {MEAL_SLOTS.find(m=>m.id===searchSlot)?.label}</h3>
+                <button onClick={()=>setSearchSlot(null)} style={{background:"none",border:"none",color:"var(--text-dim)",fontSize:22,cursor:"pointer"}}>×</button>
               </div>
               <div style={{display:"flex",gap:8}}>
-                <input autoFocus value={searchQ} onChange={e=>setSearchQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")runSearch();}} placeholder="es: muller caffè, fage yogurt, kinder" style={{flex:1,padding:"11px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:14,outline:"none"}}/>
-                <button onClick={runSearch} disabled={searching} style={{padding:"11px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>{searching?"…":"Cerca"}</button>
+                <input autoFocus value={searchQ} onChange={e=>setSearchQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")runSearch();}} placeholder="es: muller caffè, fage yogurt, kinder" style={{flex:1,padding:"11px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:14,outline:"none"}}/>
+                <button onClick={runSearch} disabled={searching} style={{padding:"11px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>{searching?"…":"Cerca"}</button>
               </div>
             </div>
             <div style={{overflowY:"auto",padding:"12px 16px 24px"}}>
-              {searching&&<div style={{textAlign:"center",color:"#64748B",padding:20,fontSize:13}}>Ricerca nel database Open Food Facts…</div>}
+              {searching&&<div style={{textAlign:"center",color:"var(--text-dim)",padding:20,fontSize:13}}>Ricerca nel database Open Food Facts…</div>}
               {searchErr&&<div style={{background:"#422006",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#FBBF24"}}>{searchErr}</div>}
               {searchRes.map((prod,i)=>(<ProductRow key={i} prod={prod} onAdd={(g)=>{addProduct(searchSlot,prod,g);setSearchSlot(null);}}/>))}
-              {!searching&&!searchErr&&searchRes.length===0&&<div style={{textAlign:"center",color:"#475569",padding:30,fontSize:13}}>Scrivi marca + nome del prodotto e premi Cerca.<br/>Es: "muller caffè", "kinder", "barilla pesto"</div>}
+              {!searching&&!searchErr&&searchRes.length===0&&<div style={{textAlign:"center",color:"var(--muted)",padding:30,fontSize:13}}>Scrivi marca + nome del prodotto e premi Cerca.<br/>Es: "muller caffè", "kinder", "barilla pesto"</div>}
             </div>
           </div>
         </div>
@@ -787,7 +813,7 @@ function AppInner(){
 }
 
 /* ============ SYNC VIEW ============ */
-function SyncView({syncState,applyPayload}){
+function SyncView({syncState,applyPayload,theme,setTheme}){
   const [uid,setUid]=useState(null);
   const [code,setCode]=useState("");
   const [importCode,setImportCode]=useState("");
@@ -796,12 +822,40 @@ function SyncView({syncState,applyPayload}){
 
   useEffect(()=>{getUserId().then(setUid);},[syncState]);
 
+  const themeSelector=(
+    <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
+      <h3 style={{margin:"0 0 4px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>🎨 Tema dell'app</h3>
+      <p style={{margin:"0 0 12px",fontSize:12,color:"var(--text-dim)"}}>Scegli l'aspetto. La preferenza viene salvata.</p>
+      <div style={{display:"flex",gap:10}}>
+        {[["midnight","Midnight","Scuro, blu notte","#0F172A","#3B82F6"],["fresh","Fresh","Chiaro, verde","#F6F7F4","#2F7D4F"]].map(([id,name,desc,bg,ac])=>{
+          const on=theme===id;
+          return (
+            <button key={id} onClick={()=>setTheme(id)} style={{flex:1,padding:0,borderRadius:12,border:on?"2px solid var(--accent)":"2px solid var(--border)",background:"transparent",cursor:"pointer",overflow:"hidden",textAlign:"left"}}>
+              <div style={{height:54,background:bg,position:"relative",display:"flex",alignItems:"center",padding:"0 12px",gap:6}}>
+                <div style={{width:22,height:22,borderRadius:6,background:ac}}/>
+                <div style={{flex:1}}><div style={{height:5,width:"60%",background:ac,borderRadius:3,marginBottom:4,opacity:0.9}}/><div style={{height:5,width:"40%",background:id==="fresh"?"#C9D2C4":"#475569",borderRadius:3}}/></div>
+                {on&&<div style={{position:"absolute",top:6,right:6,width:18,height:18,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</div>}
+              </div>
+              <div style={{padding:"8px 12px",background:"var(--surface)"}}>
+                <div style={{fontSize:13,fontWeight:700,color:on?"var(--accent)":"var(--text)"}}>{name}</div>
+                <div style={{fontSize:10,color:"var(--text-dim)"}}>{desc}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   if(!syncConfigured){
     return(
-      <div style={{background:"#1E293B",borderRadius:12,padding:20,border:"1px solid #334155"}}>
-        <div style={{fontSize:30,marginBottom:10,textAlign:"center"}}>☁️</div>
-        <h3 style={{margin:"0 0 8px",fontSize:15,color:"#F1F5F9",textAlign:"center"}}>Sincronizzazione non configurata</h3>
-        <p style={{margin:0,fontSize:13,color:"#94A3B8",lineHeight:1.6}}>L'app sta salvando solo su questo dispositivo. Per sincronizzare i dati ovunque in modo anonimo, segui <strong style={{color:"#60A5FA"}}>GUIDA-SUPABASE.md</strong>: crea un progetto Supabase gratuito e incolla due chiavi. Nessun dato personale verrà mai salvato.</p>
+      <div>
+        {themeSelector}
+        <div style={{background:"var(--surface)",borderRadius:12,padding:20,border:"1px solid var(--border)"}}>
+          <div style={{fontSize:30,marginBottom:10,textAlign:"center"}}>☁️</div>
+          <h3 style={{margin:"0 0 8px",fontSize:15,color:"var(--text-strong)",textAlign:"center"}}>Sincronizzazione non configurata</h3>
+          <p style={{margin:0,fontSize:13,color:"var(--text-soft)",lineHeight:1.6}}>L'app sta salvando solo su questo dispositivo. Per sincronizzare i dati ovunque in modo anonimo, segui <strong style={{color:"var(--accent-light)"}}>GUIDA-SUPABASE.md</strong>: crea un progetto Supabase gratuito e incolla due chiavi. Nessun dato personale verrà mai salvato.</p>
+        </div>
       </div>
     );
   }
@@ -821,16 +875,17 @@ function SyncView({syncState,applyPayload}){
   };
   const copy=()=>{ if(code){navigator.clipboard?.writeText(code); setMsg({t:"ok",x:"Codice copiato negli appunti."});} };
 
-  const statusInfo={synced:["#34D399","✅ Tutto sincronizzato"],saving:["#FBBF24","💾 Salvataggio in corso…"],connecting:["#60A5FA","🔄 Connessione…"],error:["#F87171","⚠️ Offline — i dati restano salvati qui e si sincronizzeranno al ritorno della connessione"],off:["#475569","—"]}[syncState.status];
+  const statusInfo={synced:["#34D399","✅ Tutto sincronizzato"],saving:["#FBBF24","💾 Salvataggio in corso…"],connecting:["var(--accent-light)","🔄 Connessione…"],error:["#F87171","⚠️ Offline — i dati restano salvati qui e si sincronizzeranno al ritorno della connessione"],off:["var(--muted)","—"]}[syncState.status];
 
   return(
     <div>
-      <div style={{background:"#1E293B",borderRadius:12,padding:16,marginBottom:14,border:"1px solid #334155"}}>
+      {themeSelector}
+      <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
           <span style={{width:10,height:10,borderRadius:"50%",background:statusInfo[0]}}/>
           <span style={{fontSize:14,fontWeight:700,color:statusInfo[0]}}>{statusInfo[1]}</span>
         </div>
-        {syncState.last&&<div style={{fontSize:11,color:"#64748B"}}>Ultimo salvataggio cloud: {new Date(syncState.last).toLocaleTimeString("it-IT")}</div>}
+        {syncState.last&&<div style={{fontSize:11,color:"var(--text-dim)"}}>Ultimo salvataggio cloud: {new Date(syncState.last).toLocaleTimeString("it-IT")}</div>}
       </div>
 
       <div style={{background:"#0F2A1E",borderRadius:12,padding:16,marginBottom:14,border:"1px solid #059669"}}>
@@ -840,23 +895,23 @@ function SyncView({syncState,applyPayload}){
       </div>
 
       {/* Collega un altro dispositivo */}
-      <div style={{background:"#1E293B",borderRadius:12,padding:16,marginBottom:14,border:"1px solid #334155"}}>
-        <h3 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:"#F1F5F9"}}>📲 Usa su un altro dispositivo</h3>
-        <p style={{margin:"0 0 12px",fontSize:12,color:"#64748B",lineHeight:1.5}}>Genera un codice qui (dispositivo principale) e incollalo sull'altro per allinearli alla stessa identità anonima.</p>
-        <button onClick={doExport} disabled={busy} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13,marginBottom:code?10:0}}>Genera codice di collegamento</button>
+      <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
+        <h3 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>📲 Usa su un altro dispositivo</h3>
+        <p style={{margin:"0 0 12px",fontSize:12,color:"var(--text-dim)",lineHeight:1.5}}>Genera un codice qui (dispositivo principale) e incollalo sull'altro per allinearli alla stessa identità anonima.</p>
+        <button onClick={doExport} disabled={busy} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13,marginBottom:code?10:0}}>Genera codice di collegamento</button>
         {code&&(
-          <div style={{background:"#0F172A",borderRadius:8,padding:10,border:"1px solid #334155"}}>
-            <div style={{fontSize:11,color:"#94A3B8",wordBreak:"break-all",fontFamily:"monospace",marginBottom:8,maxHeight:80,overflow:"auto"}}>{code}</div>
-            <button onClick={copy} style={{padding:"6px 12px",borderRadius:6,border:"1px solid #334155",background:"transparent",color:"#60A5FA",cursor:"pointer",fontSize:12}}>📋 Copia</button>
+          <div style={{background:"var(--bg)",borderRadius:8,padding:10,border:"1px solid var(--border)"}}>
+            <div style={{fontSize:11,color:"var(--text-soft)",wordBreak:"break-all",fontFamily:"monospace",marginBottom:8,maxHeight:80,overflow:"auto"}}>{code}</div>
+            <button onClick={copy} style={{padding:"6px 12px",borderRadius:6,border:"1px solid var(--border)",background:"transparent",color:"var(--accent-light)",cursor:"pointer",fontSize:12}}>📋 Copia</button>
             <div style={{fontSize:10,color:"#FBBF24",marginTop:8}}>⚠️ Chiunque abbia questo codice accede ai tuoi dati. Non condividerlo.</div>
           </div>
         )}
       </div>
 
-      <div style={{background:"#1E293B",borderRadius:12,padding:16,marginBottom:14,border:"1px solid #334155"}}>
-        <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"#F1F5F9"}}>📥 Collega questo dispositivo</h3>
-        <textarea value={importCode} onChange={e=>setImportCode(e.target.value)} placeholder="Incolla qui il codice generato sull'altro dispositivo" rows={3} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:12,outline:"none",boxSizing:"border-box",resize:"vertical",fontFamily:"monospace"}}/>
-        <button onClick={doImport} disabled={busy||!importCode.trim()} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:importCode.trim()?"linear-gradient(135deg,#059669,#047857)":"#334155",color:"#fff",fontWeight:700,cursor:importCode.trim()?"pointer":"default",fontSize:13,marginTop:10}}>Collega e sincronizza</button>
+      <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
+        <h3 style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>📥 Collega questo dispositivo</h3>
+        <textarea value={importCode} onChange={e=>setImportCode(e.target.value)} placeholder="Incolla qui il codice generato sull'altro dispositivo" rows={3} style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:12,outline:"none",boxSizing:"border-box",resize:"vertical",fontFamily:"monospace"}}/>
+        <button onClick={doImport} disabled={busy||!importCode.trim()} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:importCode.trim()?"linear-gradient(135deg,#059669,#047857)":"var(--border)",color:"#fff",fontWeight:700,cursor:importCode.trim()?"pointer":"default",fontSize:13,marginTop:10}}>Collega e sincronizza</button>
       </div>
 
       {msg&&<div style={{background:msg.t==="ok"?"#0F2A1E":"#3B1212",borderRadius:8,padding:"10px 14px",fontSize:12,color:msg.t==="ok"?"#6EE7B7":"#FCA5A5",border:`1px solid ${msg.t==="ok"?"#059669":"#7F1D1D"}`}}>{msg.x}</div>}
@@ -989,29 +1044,29 @@ function CoachView({days,plans,weights,setTab}){
 
   return(
     <div>
-      <div style={{background:"linear-gradient(135deg,#1E3A5F,#0F172A)",borderRadius:14,padding:18,marginBottom:16,border:"1px solid #334155"}}>
+      <div style={{background:"linear-gradient(135deg,var(--header-from),var(--header-to))",borderRadius:14,padding:18,marginBottom:16,border:"1px solid var(--border)"}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
           <span style={{fontSize:22}}>🧭</span>
-          <h2 style={{margin:0,fontSize:18,fontWeight:700,color:"#F1F5F9"}}>Il tuo Coach</h2>
+          <h2 style={{margin:0,fontSize:18,fontWeight:700,color:"var(--text-strong)"}}>Il tuo Coach</h2>
         </div>
-        <p style={{margin:0,fontSize:12,color:"#94A3B8",lineHeight:1.5}}>Analisi degli ultimi {n||0} giorni di alimentazione, {totWorkouts} allenamenti e {wPts.length} pesate, confrontati con il tuo piano.</p>
+        <p style={{margin:0,fontSize:12,color:"var(--text-soft)",lineHeight:1.5}}>Analisi degli ultimi {n||0} giorni di alimentazione, {totWorkouts} allenamenti e {wPts.length} pesate, confrontati con il tuo piano.</p>
       </div>
 
       {score!=null&&(
-        <div style={{background:"#1E293B",borderRadius:14,padding:18,marginBottom:16,border:"1px solid #334155",display:"flex",alignItems:"center",gap:18}}>
+        <div style={{background:"var(--surface)",borderRadius:14,padding:18,marginBottom:16,border:"1px solid var(--border)",display:"flex",alignItems:"center",gap:18}}>
           <div style={{position:"relative",width:84,height:84,flexShrink:0}}>
             <svg viewBox="0 0 84 84" style={{transform:"rotate(-90deg)"}}>
-              <circle cx="42" cy="42" r="36" fill="none" stroke="#0F172A" strokeWidth="9"/>
+              <circle cx="42" cy="42" r="36" fill="none" stroke="var(--bg)" strokeWidth="9"/>
               <circle cx="42" cy="42" r="36" fill="none" stroke={scoreColor} strokeWidth="9" strokeLinecap="round" strokeDasharray={`${score/100*226} 226`}/>
             </svg>
             <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
               <span style={{fontSize:24,fontWeight:800,color:scoreColor}}>{score}</span>
-              <span style={{fontSize:9,color:"#64748B"}}>/100</span>
+              <span style={{fontSize:9,color:"var(--text-dim)"}}>/100</span>
             </div>
           </div>
           <div>
             <div style={{fontSize:15,fontWeight:700,color:scoreColor,marginBottom:4}}>{scoreLbl}</div>
-            <div style={{fontSize:11,color:"#64748B",lineHeight:1.5}}>Punteggio di aderenza che combina costanza calorica, proteine, allenamento e monitoraggio del peso.</div>
+            <div style={{fontSize:11,color:"var(--text-dim)",lineHeight:1.5}}>Punteggio di aderenza che combina costanza calorica, proteine, allenamento e monitoraggio del peso.</div>
           </div>
         </div>
       )}
@@ -1023,26 +1078,26 @@ function CoachView({days,plans,weights,setTab}){
             ["Media proteine",`${avgP} g`,activePlan?`target ${activePlan.protein}g`:""],
             ["Allenamenti/sett",`${workoutsPerWeek}`,plannedPerWeek?`piano: ${plannedPerWeek}`:""],
             ["Ritmo peso",weeklyRate==null?"—":`${weeklyRate>0?"+":""}${weeklyRate} kg`,"a settimana"]].map(([k,v,sub])=>(
-            <div key={k} style={{background:"#1E293B",borderRadius:10,padding:"12px 14px",border:"1px solid #334155"}}>
-              <div style={{fontSize:10,color:"#64748B"}}>{k}</div>
-              <div style={{fontSize:18,fontWeight:800,color:"#60A5FA"}}>{v}</div>
-              {sub&&<div style={{fontSize:10,color:"#475569"}}>{sub}</div>}
+            <div key={k} style={{background:"var(--surface)",borderRadius:10,padding:"12px 14px",border:"1px solid var(--border)"}}>
+              <div style={{fontSize:10,color:"var(--text-dim)"}}>{k}</div>
+              <div style={{fontSize:18,fontWeight:800,color:"var(--accent-light)"}}>{v}</div>
+              {sub&&<div style={{fontSize:10,color:"var(--muted)"}}>{sub}</div>}
             </div>
           ))}
         </div>
       )}
 
       {/* consigli */}
-      <div style={{fontSize:12,color:"#64748B",marginBottom:10,fontWeight:600}}>CONSIGLI PERSONALIZZATI ({tips.length})</div>
+      <div style={{fontSize:12,color:"var(--text-dim)",marginBottom:10,fontWeight:600}}>CONSIGLI PERSONALIZZATI ({tips.length})</div>
       {tips.map((t,i)=>(
-        <div key={i} style={{background:"#1E293B",borderRadius:12,marginBottom:10,padding:16,border:"1px solid #334155",borderLeft:`3px solid ${priColor[t.pri]}`}}>
+        <div key={i} style={{background:"var(--surface)",borderRadius:12,marginBottom:10,padding:16,border:"1px solid var(--border)",borderLeft:`3px solid ${priColor[t.pri]}`}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
             <span style={{fontSize:18}}>{t.icon}</span>
-            <span style={{fontSize:13,fontWeight:700,color:"#F1F5F9"}}>{t.cat}</span>
+            <span style={{fontSize:13,fontWeight:700,color:"var(--text-strong)"}}>{t.cat}</span>
             <span style={{marginLeft:"auto",fontSize:10,fontWeight:700,color:priColor[t.pri],background:priBg[t.pri],borderRadius:8,padding:"3px 9px"}}>{priLbl[t.pri]}</span>
           </div>
-          <p style={{margin:0,fontSize:13,color:"#CBD5E1",lineHeight:1.55}}>{t.txt}</p>
-          {t.action&&<button onClick={t.action} style={{marginTop:10,padding:"7px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>{t.actionLbl} →</button>}
+          <p style={{margin:0,fontSize:13,color:"var(--text)",lineHeight:1.55}}>{t.txt}</p>
+          {t.action&&<button onClick={t.action} style={{marginTop:10,padding:"7px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>{t.actionLbl} →</button>}
         </div>
       ))}
 
@@ -1088,74 +1143,74 @@ function WeightView({weights,wInput,setWInput,saveWeight,removeWeight,selectedDa
   const area=pts.length?`${line} L${x(pts[pts.length-1].t).toFixed(1)},${H-padB} L${x(pts[0].t).toFixed(1)},${H-padB} Z`:"";
   const yTicks=4;const ticks=Array.from({length:yTicks+1},(_,i)=>minV+(i/yTicks)*(maxV-minV));
 
-  const inp={flex:1,padding:"11px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:15,outline:"none"};
+  const inp={flex:1,padding:"11px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:15,outline:"none"};
 
   return(
     <div>
       {/* input pesata */}
-      <div style={{background:"#1E293B",borderRadius:12,padding:16,marginBottom:16,border:"1px solid #334155"}}>
-        <h3 style={{margin:"0 0 10px",fontSize:14,fontWeight:700,color:"#F1F5F9"}}>Registra una pesata</h3>
+      <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:16,border:"1px solid var(--border)"}}>
+        <h3 style={{margin:"0 0 10px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>Registra una pesata</h3>
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
-          <input type="date" value={selectedDate} max={todayKey()} onChange={e=>setSelectedDate(e.target.value)} style={{padding:"10px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:13,colorScheme:"dark"}}/>
+          <input type="date" value={selectedDate} max={todayKey()} onChange={e=>setSelectedDate(e.target.value)} style={{padding:"10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,colorScheme:"dark"}}/>
           <input value={wInput} onChange={e=>setWInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveWeight();}} placeholder={weights[selectedDate]?`Attuale: ${weights[selectedDate]} kg`:"es. 64.5"} inputMode="decimal" style={inp}/>
-          <span style={{fontSize:13,color:"#64748B"}}>kg</span>
-          <button onClick={saveWeight} style={{padding:"11px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>Salva</button>
+          <span style={{fontSize:13,color:"var(--text-dim)"}}>kg</span>
+          <button onClick={saveWeight} style={{padding:"11px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>Salva</button>
         </div>
-        <p style={{margin:0,fontSize:11,color:"#64748B"}}>Per coerenza pesati sempre nelle stesse condizioni: mattino, a digiuno, dopo il bagno.</p>
+        <p style={{margin:0,fontSize:11,color:"var(--text-dim)"}}>Per coerenza pesati sempre nelle stesse condizioni: mattino, a digiuno, dopo il bagno.</p>
       </div>
 
       {pts.length===0?(
-        <div style={{background:"#1E293B",borderRadius:12,padding:30,textAlign:"center",border:"1px solid #334155"}}>
+        <div style={{background:"var(--surface)",borderRadius:12,padding:30,textAlign:"center",border:"1px solid var(--border)"}}>
           <div style={{fontSize:34,marginBottom:10}}>⚖️</div>
-          <p style={{margin:0,fontSize:14,color:"#94A3B8",lineHeight:1.6}}>Nessuna pesata registrata.<br/>Inserisci la prima per iniziare a vedere l'andamento.</p>
+          <p style={{margin:0,fontSize:14,color:"var(--text-soft)",lineHeight:1.6}}>Nessuna pesata registrata.<br/>Inserisci la prima per iniziare a vedere l'andamento.</p>
         </div>
       ):(<>
         {/* riepilogo */}
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
-          <div style={{background:"#1E293B",borderRadius:10,padding:"12px",border:"1px solid #334155",textAlign:"center"}}>
-            <div style={{fontSize:10,color:"#64748B"}}>ATTUALE</div>
-            <div style={{fontSize:22,fontWeight:800,color:"#60A5FA"}}>{latest.v}<span style={{fontSize:12,color:"#475569"}}>kg</span></div>
+          <div style={{background:"var(--surface)",borderRadius:10,padding:"12px",border:"1px solid var(--border)",textAlign:"center"}}>
+            <div style={{fontSize:10,color:"var(--text-dim)"}}>ATTUALE</div>
+            <div style={{fontSize:22,fontWeight:800,color:"var(--accent-light)"}}>{latest.v}<span style={{fontSize:12,color:"var(--muted)"}}>kg</span></div>
           </div>
-          <div style={{background:"#1E293B",borderRadius:10,padding:"12px",border:"1px solid #334155",textAlign:"center"}}>
-            <div style={{fontSize:10,color:"#64748B"}}>VARIAZIONE</div>
-            <div style={{fontSize:22,fontWeight:800,color:totalChange<0?"#34D399":totalChange>0?"#F87171":"#94A3B8"}}>{totalChange>0?"+":""}{totalChange}<span style={{fontSize:12,color:"#475569"}}>kg</span></div>
+          <div style={{background:"var(--surface)",borderRadius:10,padding:"12px",border:"1px solid var(--border)",textAlign:"center"}}>
+            <div style={{fontSize:10,color:"var(--text-dim)"}}>VARIAZIONE</div>
+            <div style={{fontSize:22,fontWeight:800,color:totalChange<0?"#34D399":totalChange>0?"#F87171":"var(--text-soft)"}}>{totalChange>0?"+":""}{totalChange}<span style={{fontSize:12,color:"var(--muted)"}}>kg</span></div>
           </div>
-          <div style={{background:"#1E293B",borderRadius:10,padding:"12px",border:"1px solid #334155",textAlign:"center"}}>
-            <div style={{fontSize:10,color:"#64748B"}}>RITMO/SETT</div>
-            <div style={{fontSize:22,fontWeight:800,color:weeklyRate<0?"#34D399":weeklyRate>0?"#FBBF24":"#94A3B8"}}>{weeklyRate==null?"—":`${weeklyRate>0?"+":""}${weeklyRate}`}<span style={{fontSize:12,color:"#475569"}}>kg</span></div>
+          <div style={{background:"var(--surface)",borderRadius:10,padding:"12px",border:"1px solid var(--border)",textAlign:"center"}}>
+            <div style={{fontSize:10,color:"var(--text-dim)"}}>RITMO/SETT</div>
+            <div style={{fontSize:22,fontWeight:800,color:weeklyRate<0?"#34D399":weeklyRate>0?"#FBBF24":"var(--text-soft)"}}>{weeklyRate==null?"—":`${weeklyRate>0?"+":""}${weeklyRate}`}<span style={{fontSize:12,color:"var(--muted)"}}>kg</span></div>
           </div>
         </div>
 
         {/* grafico */}
-        <div style={{background:"#1E293B",borderRadius:12,padding:"16px 8px 8px",marginBottom:14,border:"1px solid #334155"}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#F1F5F9",padding:"0 8px",marginBottom:8}}>📉 Andamento peso</div>
+        <div style={{background:"var(--surface)",borderRadius:12,padding:"16px 8px 8px",marginBottom:14,border:"1px solid var(--border)"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--text-strong)",padding:"0 8px",marginBottom:8}}>📉 Andamento peso</div>
           <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto"}}>
-            <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3B82F6" stopOpacity="0.35"/><stop offset="100%" stopColor="#3B82F6" stopOpacity="0"/></linearGradient></defs>
-            {ticks.map((tk,i)=>(<g key={i}><line x1={padL} y1={y(tk)} x2={W-padR} y2={y(tk)} stroke="#334155" strokeWidth="1" strokeDasharray="3 4"/><text x={padL-6} y={y(tk)+3} fill="#64748B" fontSize="10" textAnchor="end">{tk.toFixed(1)}</text></g>))}
+            <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity="0.35"/><stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/></linearGradient></defs>
+            {ticks.map((tk,i)=>(<g key={i}><line x1={padL} y1={y(tk)} x2={W-padR} y2={y(tk)} stroke="var(--border)" strokeWidth="1" strokeDasharray="3 4"/><text x={padL-6} y={y(tk)+3} fill="var(--text-dim)" fontSize="10" textAnchor="end">{tk.toFixed(1)}</text></g>))}
             {startWeight!=null&&startWeight>=minV&&startWeight<=maxV&&<line x1={padL} y1={y(startWeight)} x2={W-padR} y2={y(startWeight)} stroke="#F59E0B" strokeWidth="1.2" strokeDasharray="5 4" opacity="0.7"/>}
             {pts.length>1&&<path d={area} fill="url(#wg)"/>}
-            {pts.length>1&&<path d={line} fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>}
-            {pts.map((p,i)=>(<circle key={i} cx={x(p.t)} cy={y(p.v)} r={i===pts.length-1?4.5:3} fill={i===pts.length-1?"#60A5FA":"#3B82F6"} stroke="#0F172A" strokeWidth="1.5"/>))}
+            {pts.length>1&&<path d={line} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>}
+            {pts.map((p,i)=>(<circle key={i} cx={x(p.t)} cy={y(p.v)} r={i===pts.length-1?4.5:3} fill={i===pts.length-1?"var(--accent-light)":"var(--accent)"} stroke="var(--bg)" strokeWidth="1.5"/>))}
             {/* x labels: primo, medio, ultimo */}
-            {[0,Math.floor((pts.length-1)/2),pts.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(idx=>{const p=pts[idx];const d=new Date(p.t);return(<text key={idx} x={x(p.t)} y={H-8} fill="#64748B" fontSize="10" textAnchor="middle">{d.getDate()}/{d.getMonth()+1}</text>);})}
+            {[0,Math.floor((pts.length-1)/2),pts.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(idx=>{const p=pts[idx];const d=new Date(p.t);return(<text key={idx} x={x(p.t)} y={H-8} fill="var(--text-dim)" fontSize="10" textAnchor="middle">{d.getDate()}/{d.getMonth()+1}</text>);})}
           </svg>
-          {startWeight!=null&&<div style={{fontSize:10,color:"#64748B",padding:"4px 10px"}}><span style={{color:"#F59E0B"}}>— —</span> peso iniziale del piano ({startWeight} kg)</div>}
+          {startWeight!=null&&<div style={{fontSize:10,color:"var(--text-dim)",padding:"4px 10px"}}><span style={{color:"#F59E0B"}}>— —</span> peso iniziale del piano ({startWeight} kg)</div>}
         </div>
 
         {/* insight */}
-        <div style={{background:activePlan?"#1E3A2F":"#1E293B",borderRadius:12,padding:14,marginBottom:14,border:activePlan?"1px solid #059669":"1px solid #334155"}}>
-          <div style={{fontSize:12,fontWeight:700,color:activePlan?"#6EE7B7":"#94A3B8",marginBottom:6}}>🧠 Lettura del trend</div>
-          <div style={{fontSize:12,color:activePlan?"#A7F3D0":"#94A3B8",lineHeight:1.5}}>{weightInsight(weeklyRate,activePlan,avg7,totalChange,pts.length)}</div>
+        <div style={{background:activePlan?"#1E3A2F":"var(--surface)",borderRadius:12,padding:14,marginBottom:14,border:activePlan?"1px solid #059669":"1px solid var(--border)"}}>
+          <div style={{fontSize:12,fontWeight:700,color:activePlan?"#6EE7B7":"var(--text-soft)",marginBottom:6}}>🧠 Lettura del trend</div>
+          <div style={{fontSize:12,color:activePlan?"#A7F3D0":"var(--text-soft)",lineHeight:1.5}}>{weightInsight(weeklyRate,activePlan,avg7,totalChange,pts.length)}</div>
         </div>
 
         {/* lista pesate */}
-        <div style={{fontSize:12,color:"#64748B",marginBottom:8,fontWeight:600}}>PESATE REGISTRATE ({pts.length})</div>
+        <div style={{fontSize:12,color:"var(--text-dim)",marginBottom:8,fontWeight:600}}>PESATE REGISTRATE ({pts.length})</div>
         {[...pts].reverse().map((p,i)=>{const prev=pts[pts.length-2-i];const d=prev?+(p.v-prev.v).toFixed(1):null;return(
-          <div key={p.k} style={{display:"flex",alignItems:"center",gap:10,background:"#1E293B",borderRadius:10,padding:"11px 14px",marginBottom:6,border:"1px solid #334155"}}>
-            <div style={{flex:1}}><span style={{fontSize:13,fontWeight:700,color:"#F1F5F9"}}>{fmtDate(p.k)}</span></div>
-            {d!=null&&<span style={{fontSize:11,color:d<0?"#34D399":d>0?"#F87171":"#64748B"}}>{d>0?"+":""}{d} kg</span>}
-            <span style={{fontSize:15,fontWeight:800,color:"#60A5FA"}}>{p.v} kg</span>
-            <button onClick={()=>removeWeight(p.k)} style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:16,padding:2}}>×</button>
+          <div key={p.k} style={{display:"flex",alignItems:"center",gap:10,background:"var(--surface)",borderRadius:10,padding:"11px 14px",marginBottom:6,border:"1px solid var(--border)"}}>
+            <div style={{flex:1}}><span style={{fontSize:13,fontWeight:700,color:"var(--text-strong)"}}>{fmtDate(p.k)}</span></div>
+            {d!=null&&<span style={{fontSize:11,color:d<0?"#34D399":d>0?"#F87171":"var(--text-dim)"}}>{d>0?"+":""}{d} kg</span>}
+            <span style={{fontSize:15,fontWeight:800,color:"var(--accent-light)"}}>{p.v} kg</span>
+            <button onClick={()=>removeWeight(p.k)} style={{background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",fontSize:16,padding:2}}>×</button>
           </div>);})}
       </>)}
     </div>
@@ -1197,20 +1252,20 @@ function Wizard({wizard,setWizard,onSave,analysis}){
   const preview=computePlan(data);
   const STEPS=["Dati","Obiettivo","Allenamenti","Preferenze","Pasti liberi","Riepilogo"];
 
-  const inp={width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid #334155",background:"#0F172A",color:"#E2E8F0",fontSize:14,outline:"none",boxSizing:"border-box"};
-  const lbl={fontSize:12,color:"#94A3B8",display:"block",marginBottom:6,fontWeight:600};
-  const chip=(on)=>({padding:"8px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:on?"linear-gradient(135deg,#2563EB,#1D4ED8)":"#0F172A",color:on?"#fff":"#94A3B8",outline:on?"none":"1px solid #334155"});
+  const inp={width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:14,outline:"none",boxSizing:"border-box"};
+  const lbl={fontSize:12,color:"var(--text-soft)",display:"block",marginBottom:6,fontWeight:600};
+  const chip=(on)=>({padding:"8px 14px",borderRadius:20,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:on?"linear-gradient(135deg,var(--accent),var(--accent-deep))":"var(--bg)",color:on?"#fff":"var(--text-soft)",outline:on?"none":"1px solid var(--border)"});
 
   const FOODS=["pollo","tacchino","salmone","tonno","bresaola","uova","yogurt greco","merluzzo","avena","riso","pasta integrale","pane integrale","patate","patate dolci","gallette","mandorle","frutti di bosco","banana","mela","verdure","broccoli","spinaci"];
 
   return(
     <div>
       {/* progress */}
-      <div style={{display:"flex",gap:4,marginBottom:18}}>{STEPS.map((s,i)=>(<div key={i} style={{flex:1,textAlign:"center"}}><div style={{height:4,borderRadius:2,background:i<=step?"#3B82F6":"#334155",marginBottom:5}}/><div style={{fontSize:9,color:i<=step?"#60A5FA":"#475569"}}>{s}</div></div>))}</div>
+      <div style={{display:"flex",gap:4,marginBottom:18}}>{STEPS.map((s,i)=>(<div key={i} style={{flex:1,textAlign:"center"}}><div style={{height:4,borderRadius:2,background:i<=step?"var(--accent)":"var(--border)",marginBottom:5}}/><div style={{fontSize:9,color:i<=step?"var(--accent-light)":"var(--muted)"}}>{s}</div></div>))}</div>
 
-      <div style={{background:"#1E293B",borderRadius:14,padding:18,border:"1px solid #334155",marginBottom:14}}>
+      <div style={{background:"var(--surface)",borderRadius:14,padding:18,border:"1px solid var(--border)",marginBottom:14}}>
         {step===0&&(<>
-          <h3 style={{margin:"0 0 14px",fontSize:16,color:"#F1F5F9"}}>I tuoi dati</h3>
+          <h3 style={{margin:"0 0 14px",fontSize:16,color:"var(--text-strong)"}}>I tuoi dati</h3>
           <div style={{display:"flex",gap:8,marginBottom:12}}>{[["m","Uomo"],["f","Donna"]].map(([v,l])=>(<button key={v} onClick={()=>set({sex:v})} style={{...chip(data.sex===v),flex:1}}>{l}</button>))}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
             <div><label style={lbl}>Età</label><input type="number" value={data.age} onChange={e=>set({age:+e.target.value})} style={inp}/></div>
@@ -1222,28 +1277,28 @@ function Wizard({wizard,setWizard,onSave,analysis}){
         </>)}
 
         {step===1&&(<>
-          <h3 style={{margin:"0 0 14px",fontSize:16,color:"#F1F5F9"}}>Obiettivo</h3>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>{[["dimagrire","🔻 Dimagrire","Deficit ~18%, priorità perdita grassa"],["ricomposizione","♻️ Ricomposizione","Deficit lieve ~10%, grasso giù + muscolo"],["mantenimento","⚖️ Mantenimento","Calorie di mantenimento"],["massa","🔺 Aumento massa","Surplus ~10% per crescita muscolare"]].map(([v,t,d])=>(<button key={v} onClick={()=>set({goal:v})} style={{textAlign:"left",padding:"12px 14px",borderRadius:10,border:data.goal===v?"1px solid #3B82F6":"1px solid #334155",background:data.goal===v?"#1D4ED822":"#0F172A",cursor:"pointer"}}><div style={{fontSize:14,fontWeight:700,color:data.goal===v?"#60A5FA":"#E2E8F0"}}>{t}</div><div style={{fontSize:11,color:"#64748B",marginTop:2}}>{d}</div></button>))}</div>
+          <h3 style={{margin:"0 0 14px",fontSize:16,color:"var(--text-strong)"}}>Obiettivo</h3>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>{[["dimagrire","🔻 Dimagrire","Deficit ~18%, priorità perdita grassa"],["ricomposizione","♻️ Ricomposizione","Deficit lieve ~10%, grasso giù + muscolo"],["mantenimento","⚖️ Mantenimento","Calorie di mantenimento"],["massa","🔺 Aumento massa","Surplus ~10% per crescita muscolare"]].map(([v,t,d])=>(<button key={v} onClick={()=>set({goal:v})} style={{textAlign:"left",padding:"12px 14px",borderRadius:10,border:data.goal===v?"1px solid var(--accent)":"1px solid var(--border)",background:data.goal===v?"var(--accent-deep)22":"var(--bg)",cursor:"pointer"}}><div style={{fontSize:14,fontWeight:700,color:data.goal===v?"var(--accent-light)":"var(--text)"}}>{t}</div><div style={{fontSize:11,color:"var(--text-dim)",marginTop:2}}>{d}</div></button>))}</div>
         </>)}
 
         {step===2&&(<>
-          <h3 style={{margin:"0 0 6px",fontSize:16,color:"#F1F5F9"}}>Abitudini di allenamento</h3>
-          <p style={{margin:"0 0 14px",fontSize:12,color:"#64748B"}}>Aggiungi le attività settimanali tipiche: servono a calibrare il fabbisogno.</p>
+          <h3 style={{margin:"0 0 6px",fontSize:16,color:"var(--text-strong)"}}>Abitudini di allenamento</h3>
+          <p style={{margin:"0 0 14px",fontSize:12,color:"var(--text-dim)"}}>Aggiungi le attività settimanali tipiche: servono a calibrare il fabbisogno.</p>
           {(data.workouts||[]).map((w,i)=>{const t=WORKOUT_TYPES.find(x=>x.id===w.type)||WORKOUT_TYPES[0];return(
-            <div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,background:"#0F172A",borderRadius:10,padding:10}}>
+            <div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8,background:"var(--bg)",borderRadius:10,padding:10}}>
               <select value={w.type} onChange={e=>{const wt=WORKOUT_TYPES.find(x=>x.id===e.target.value);const arr=[...data.workouts];arr[i]={...arr[i],type:e.target.value,kcalEst:wt.est};set({workouts:arr});}} style={{...inp,flex:"1 1 auto",padding:"8px"}}>{WORKOUT_TYPES.map(x=>(<option key={x.id} value={x.id}>{x.icon} {x.label}</option>))}</select>
               <input type="number" value={w.perWeek} onChange={e=>{const arr=[...data.workouts];arr[i]={...arr[i],perWeek:+e.target.value};set({workouts:arr});}} style={{...inp,width:55,padding:"8px"}} title="volte/sett"/>
-              <span style={{fontSize:11,color:"#64748B"}}>×/sett</span>
+              <span style={{fontSize:11,color:"var(--text-dim)"}}>×/sett</span>
               <input type="number" value={w.kcalEst} onChange={e=>{const arr=[...data.workouts];arr[i]={...arr[i],kcalEst:+e.target.value};set({workouts:arr});}} style={{...inp,width:65,padding:"8px"}} title="kcal stimate"/>
-              <span style={{fontSize:11,color:"#64748B"}}>kcal</span>
-              <button onClick={()=>set({workouts:data.workouts.filter((_,j)=>j!==i)})} style={{background:"none",border:"none",color:"#64748B",cursor:"pointer",fontSize:18}}>×</button>
+              <span style={{fontSize:11,color:"var(--text-dim)"}}>kcal</span>
+              <button onClick={()=>set({workouts:data.workouts.filter((_,j)=>j!==i)})} style={{background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",fontSize:18}}>×</button>
             </div>);})}
-          <button onClick={()=>set({workouts:[...(data.workouts||[]),{type:"corpolibero",kcalEst:250,perWeek:1}]})} style={{padding:"9px 14px",borderRadius:8,border:"1px dashed #475569",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:12,width:"100%"}}>+ Aggiungi attività</button>
+          <button onClick={()=>set({workouts:[...(data.workouts||[]),{type:"corpolibero",kcalEst:250,perWeek:1}]})} style={{padding:"9px 14px",borderRadius:8,border:"1px dashed var(--muted)",background:"transparent",color:"var(--text-soft)",cursor:"pointer",fontSize:12,width:"100%"}}>+ Aggiungi attività</button>
         </>)}
 
         {step===3&&(<>
-          <h3 style={{margin:"0 0 6px",fontSize:16,color:"#F1F5F9"}}>Preferenze alimentari</h3>
-          <p style={{margin:"0 0 12px",fontSize:12,color:"#64748B"}}>Tocca per indicare cosa gradisci. Il latte è già escluso di default.</p>
+          <h3 style={{margin:"0 0 6px",fontSize:16,color:"var(--text-strong)"}}>Preferenze alimentari</h3>
+          <p style={{margin:"0 0 12px",fontSize:12,color:"var(--text-dim)"}}>Tocca per indicare cosa gradisci. Il latte è già escluso di default.</p>
           <label style={lbl}>✅ Alimenti graditi</label>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>{FOODS.map(f=>{const on=(data.likes||[]).includes(f);return(<button key={f} onClick={()=>set({likes:on?data.likes.filter(x=>x!==f):[...(data.likes||[]),f]})} style={{...chip(on),padding:"6px 11px",fontSize:12}}>{f}</button>);})}</div>
           <label style={lbl}>🚫 Da evitare (testo libero, separato da virgola)</label>
@@ -1251,13 +1306,13 @@ function Wizard({wizard,setWizard,onSave,analysis}){
         </>)}
 
         {step===4&&(<>
-          <h3 style={{margin:"0 0 6px",fontSize:16,color:"#F1F5F9"}}>Pasti liberi</h3>
-          <p style={{margin:"0 0 14px",fontSize:12,color:"#64748B"}}>Quando concederti il pasto libero durante la settimana.</p>
-          {[1,2,3,4,5,6,0].map(di=>(<div key={di} style={{marginBottom:8}}><div style={{fontSize:13,fontWeight:600,color:"#E2E8F0",marginBottom:6}}>{DOW[di]}</div><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{MEAL_SLOTS.map(s=>{const cur=data.freeMeals?.[di]||[];const on=cur.includes(s.id);return(<button key={s.id} onClick={()=>{const fm={...(data.freeMeals||{})};const arr=fm[di]||[];const next=arr.includes(s.id)?arr.filter(x=>x!==s.id):[...arr,s.id];if(next.length)fm[di]=next;else delete fm[di];set({freeMeals:fm});}} style={{padding:"5px 10px",borderRadius:16,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:on?"linear-gradient(135deg,#D97706,#B45309)":"#0F172A",color:on?"#fff":"#64748B",outline:on?"none":"1px solid #334155"}}>{s.icon}</button>);})}</div></div>))}
+          <h3 style={{margin:"0 0 6px",fontSize:16,color:"var(--text-strong)"}}>Pasti liberi</h3>
+          <p style={{margin:"0 0 14px",fontSize:12,color:"var(--text-dim)"}}>Quando concederti il pasto libero durante la settimana.</p>
+          {[1,2,3,4,5,6,0].map(di=>(<div key={di} style={{marginBottom:8}}><div style={{fontSize:13,fontWeight:600,color:"var(--text)",marginBottom:6}}>{DOW[di]}</div><div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{MEAL_SLOTS.map(s=>{const cur=data.freeMeals?.[di]||[];const on=cur.includes(s.id);return(<button key={s.id} onClick={()=>{const fm={...(data.freeMeals||{})};const arr=fm[di]||[];const next=arr.includes(s.id)?arr.filter(x=>x!==s.id):[...arr,s.id];if(next.length)fm[di]=next;else delete fm[di];set({freeMeals:fm});}} style={{padding:"5px 10px",borderRadius:16,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:on?"linear-gradient(135deg,#D97706,#B45309)":"var(--bg)",color:on?"#fff":"var(--text-dim)",outline:on?"none":"1px solid var(--border)"}}>{s.icon}</button>);})}</div></div>))}
         </>)}
 
         {step===5&&(<>
-          <h3 style={{margin:"0 0 14px",fontSize:16,color:"#F1F5F9"}}>Riepilogo piano</h3>
+          <h3 style={{margin:"0 0 14px",fontSize:16,color:"var(--text-strong)"}}>Riepilogo piano</h3>
           {analysis&&(
             <div style={{background:"#1E3A2F",border:"1px solid #059669",borderRadius:10,padding:"12px 14px",marginBottom:14}}>
               <div style={{fontSize:12,fontWeight:700,color:"#6EE7B7",marginBottom:6}}>🧠 Analisi dei tuoi dati ({analysis.n} giorni)</div>
@@ -1267,23 +1322,23 @@ function Wizard({wizard,setWizard,onSave,analysis}){
             </div>
           )}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-            {[["BMR",`${preview.bmr} kcal`],["TDEE",`${preview.tdee} kcal`],["Da allenamenti","+"+preview.weeklyBurn+" kcal/sett"],["Target giorno normale",`${preview.targetKcal} kcal`]].map(([k,v])=>(<div key={k} style={{background:"#0F172A",borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:"#64748B"}}>{k}</div><div style={{fontSize:15,fontWeight:700,color:"#60A5FA"}}>{v}</div></div>))}
+            {[["BMR",`${preview.bmr} kcal`],["TDEE",`${preview.tdee} kcal`],["Da allenamenti","+"+preview.weeklyBurn+" kcal/sett"],["Target giorno normale",`${preview.targetKcal} kcal`]].map(([k,v])=>(<div key={k} style={{background:"var(--bg)",borderRadius:8,padding:"10px 12px"}}><div style={{fontSize:10,color:"var(--text-dim)"}}>{k}</div><div style={{fontSize:15,fontWeight:700,color:"var(--accent-light)"}}>{v}</div></div>))}
           </div>
-          <div style={{background:"linear-gradient(135deg,#1E3A5F,#1E293B)",borderRadius:10,padding:14,marginBottom:14}}>
+          <div style={{background:"linear-gradient(135deg,var(--header-from),var(--surface))",borderRadius:10,padding:14,marginBottom:14}}>
             <div style={{fontSize:12,fontWeight:700,color:"#93C5FD",marginBottom:10}}>🎯 Target macro (giorno normale)</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>{[["Kcal",preview.targetKcal,"#60A5FA"],["Prot",preview.protein+"g","#3B82F6"],["Carb",preview.carbs+"g","#F59E0B"],["Grassi",preview.fat+"g","#10B981"]].map(([k,v,c])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"#64748B"}}>{k}</div></div>))}</div>
-            <div style={{fontSize:11,color:"#64748B",marginTop:10,paddingTop:10,borderTop:"1px solid #334155"}}>Giorni sport 🎾: {preview.sport.kcal} kcal · {preview.sport.c}g carbo</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>{[["Kcal",preview.targetKcal,"var(--accent-light)"],["Prot",preview.protein+"g","var(--accent)"],["Carb",preview.carbs+"g","#F59E0B"],["Grassi",preview.fat+"g","#10B981"]].map(([k,v,c])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{k}</div></div>))}</div>
+            <div style={{fontSize:11,color:"var(--text-dim)",marginTop:10,paddingTop:10,borderTop:"1px solid var(--border)"}}>Giorni sport 🎾: {preview.sport.kcal} kcal · {preview.sport.c}g carbo</div>
           </div>
           <label style={lbl}>📅 Il piano è valido a partire dal</label>
           <input type="date" value={data.validFrom} onChange={e=>set({validFrom:e.target.value})} style={{...inp,colorScheme:"dark"}}/>
-          <p style={{fontSize:11,color:"#64748B",marginTop:8}}>I piani precedenti restano nello storico. Le giornate prima di questa data continuano a usare il piano in vigore allora.</p>
+          <p style={{fontSize:11,color:"var(--text-dim)",marginTop:8}}>I piani precedenti restano nello storico. Le giornate prima di questa data continuano a usare il piano in vigore allora.</p>
         </>)}
       </div>
 
       <div style={{display:"flex",gap:8}}>
-        {step>0&&<button onClick={()=>go(-1)} style={{flex:1,padding:"12px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#94A3B8",cursor:"pointer",fontSize:14,fontWeight:600}}>← Indietro</button>}
-        <button onClick={()=>setWizard(null)} style={{padding:"12px 16px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#64748B",cursor:"pointer",fontSize:13}}>Annulla</button>
-        {step<5?<button onClick={()=>go(1)} style={{flex:2,padding:"12px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700}}>Avanti →</button>
+        {step>0&&<button onClick={()=>go(-1)} style={{flex:1,padding:"12px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--text-soft)",cursor:"pointer",fontSize:14,fontWeight:600}}>← Indietro</button>}
+        <button onClick={()=>setWizard(null)} style={{padding:"12px 16px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--text-dim)",cursor:"pointer",fontSize:13}}>Annulla</button>
+        {step<5?<button onClick={()=>go(1)} style={{flex:2,padding:"12px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700}}>Avanti →</button>
         :<button onClick={()=>onSave({...computePlan(data),...data,id:Date.now()})} style={{flex:2,padding:"12px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#059669,#047857)",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700}}>✓ Salva piano</button>}
       </div>
     </div>
@@ -1296,30 +1351,30 @@ function PlanView({plans,onNew,onEdit,onOpenMenu}){
   const current=sorted.find(p=>p.validFrom<=todayKey())||sorted[0];
   return(
     <div>
-      <button onClick={onNew} style={{width:"100%",padding:"14px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#2563EB,#1D4ED8)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:15,marginBottom:16}}>
+      <button onClick={onNew} style={{width:"100%",padding:"14px",borderRadius:12,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:15,marginBottom:16}}>
         {plans.length?"+ Aggiorna / crea nuovo piano":"🎯 Crea il tuo primo piano personalizzato"}
       </button>
       {plans.length===0?(
-        <div style={{background:"#1E293B",borderRadius:12,padding:30,textAlign:"center",border:"1px solid #334155"}}>
+        <div style={{background:"var(--surface)",borderRadius:12,padding:30,textAlign:"center",border:"1px solid var(--border)"}}>
           <div style={{fontSize:34,marginBottom:10}}>🎯</div>
-          <p style={{margin:0,fontSize:14,color:"#94A3B8",lineHeight:1.6}}>Nessun piano ancora.<br/>Crea il primo: bastano 6 passaggi rapidi. Calcolo BMR, TDEE e macro su misura per il tuo obiettivo.</p>
+          <p style={{margin:0,fontSize:14,color:"var(--text-soft)",lineHeight:1.6}}>Nessun piano ancora.<br/>Crea il primo: bastano 6 passaggi rapidi. Calcolo BMR, TDEE e macro su misura per il tuo obiettivo.</p>
         </div>
       ):(<>
-        <div style={{fontSize:12,color:"#64748B",marginBottom:10,fontWeight:600}}>STORICO PIANI ({plans.length})</div>
+        <div style={{fontSize:12,color:"var(--text-dim)",marginBottom:10,fontWeight:600}}>STORICO PIANI ({plans.length})</div>
         {sorted.map((p,i)=>{const isCurrent=p===current;return(
-          <div key={p.id||i} style={{background:"#1E293B",borderRadius:12,marginBottom:10,padding:16,border:isCurrent?"1px solid #3B82F6":"1px solid #334155"}}>
+          <div key={p.id||i} style={{background:"var(--surface)",borderRadius:12,marginBottom:10,padding:16,border:isCurrent?"1px solid var(--accent)":"1px solid var(--border)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:14,fontWeight:700,color:"#F1F5F9"}}>Valido dal {fmtShort(p.validFrom)}</span>
-                  {isCurrent&&<span style={{fontSize:10,background:"#1D4ED8",color:"#fff",borderRadius:8,padding:"2px 8px",fontWeight:700}}>ATTIVO</span>}
+                  <span style={{fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>Valido dal {fmtShort(p.validFrom)}</span>
+                  {isCurrent&&<span style={{fontSize:10,background:"var(--accent-deep)",color:"#fff",borderRadius:8,padding:"2px 8px",fontWeight:700}}>ATTIVO</span>}
                 </div>
-                <div style={{fontSize:11,color:"#64748B",marginTop:3}}>{({dimagrire:"🔻 Dimagrire",ricomposizione:"♻️ Ricomposizione",mantenimento:"⚖️ Mantenimento",massa:"🔺 Massa"})[p.goal]} · {p.weight}kg · {p.sex==="m"?"Uomo":"Donna"} {p.age}a</div>
+                <div style={{fontSize:11,color:"var(--text-dim)",marginTop:3}}>{({dimagrire:"🔻 Dimagrire",ricomposizione:"♻️ Ricomposizione",mantenimento:"⚖️ Mantenimento",massa:"🔺 Massa"})[p.goal]} · {p.weight}kg · {p.sex==="m"?"Uomo":"Donna"} {p.age}a</div>
               </div>
-              <button onClick={()=>onEdit(p)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #334155",background:"transparent",color:"#60A5FA",cursor:"pointer",fontSize:12}}>Duplica</button>
+              <button onClick={()=>onEdit(p)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--accent-light)",cursor:"pointer",fontSize:12}}>Duplica</button>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,background:"#0F172A",borderRadius:8,padding:10}}>
-              {[["Kcal",p.targetKcal,"#60A5FA"],["Prot",p.protein+"g","#3B82F6"],["Carb",p.carbs+"g","#F59E0B"],["Grassi",p.fat+"g","#10B981"]].map(([k,v,c])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"#64748B"}}>{k}</div></div>))}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,background:"var(--bg)",borderRadius:8,padding:10}}>
+              {[["Kcal",p.targetKcal,"var(--accent-light)"],["Prot",p.protein+"g","var(--accent)"],["Carb",p.carbs+"g","#F59E0B"],["Grassi",p.fat+"g","#10B981"]].map(([k,v,c])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{k}</div></div>))}
             </div>
             {p.learnedAdjustment?<div style={{fontSize:10,color:"#6EE7B7",marginTop:8}}>🧠 Include aggiustamento dai dati: {p.learnedAdjustment>0?"+":""}{p.learnedAdjustment} kcal</div>:null}
             {isCurrent&&(
@@ -1327,7 +1382,7 @@ function PlanView({plans,onNew,onEdit,onOpenMenu}){
                 🍽️ Genera menù del giorno
               </button>
             )}
-            {isCurrent&&<div style={{fontSize:10,color:"#64748B",marginTop:6,textAlign:"center"}}>Ricette su misura per i tuoi target, diverse ogni giorno</div>}
+            {isCurrent&&<div style={{fontSize:10,color:"var(--text-dim)",marginTop:6,textAlign:"center"}}>Ricette su misura per i tuoi target, diverse ogni giorno</div>}
           </div>);})}
       </>)}
     </div>
@@ -1339,21 +1394,21 @@ function ProductRow({ prod, onAdd }) {
   const [grams, setGrams] = useState(prod.serving || 100);
   const fct = grams/100;
   return (
-    <div style={{ background:"#0F172A", borderRadius:10, padding:12, marginBottom:8, border:"1px solid #334155" }}>
+    <div style={{ background:"var(--bg)", borderRadius:10, padding:12, marginBottom:8, border:"1px solid var(--border)" }}>
       <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:8 }}>
-        {prod.img ? <img src={prod.img} alt="" style={{ width:40, height:40, borderRadius:6, objectFit:"cover", background:"#1E293B" }}/> : <div style={{ width:40, height:40, borderRadius:6, background:"#1E293B", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🍫</div>}
+        {prod.img ? <img src={prod.img} alt="" style={{ width:40, height:40, borderRadius:6, objectFit:"cover", background:"var(--surface)" }}/> : <div style={{ width:40, height:40, borderRadius:6, background:"var(--surface)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🍫</div>}
         <div style={{ flex:1 }}>
-          <div style={{ fontSize:13, fontWeight:600, color:"#E2E8F0", lineHeight:1.3 }}>{prod.name}</div>
-          <div style={{ fontSize:10, color:"#64748B" }}>per 100g: {prod.kcal100}kcal · P{prod.p100} C{prod.c100} F{prod.f100}{prod.servingTxt?` · porz: ${prod.servingTxt}`:""}</div>
+          <div style={{ fontSize:13, fontWeight:600, color:"var(--text)", lineHeight:1.3 }}>{prod.name}</div>
+          <div style={{ fontSize:10, color:"var(--text-dim)" }}>per 100g: {prod.kcal100}kcal · P{prod.p100} C{prod.c100} F{prod.f100}{prod.servingTxt?` · porz: ${prod.servingTxt}`:""}</div>
         </div>
       </div>
       <div style={{ display:"flex", gap:8, alignItems:"center" }}>
         <input type="number" value={grams} onChange={e=>setGrams(Math.max(0,parseInt(e.target.value)||0))}
-          style={{ width:70, padding:"7px 8px", borderRadius:6, border:"1px solid #334155", background:"#1E293B", color:"#E2E8F0", fontSize:13, outline:"none" }}/>
-        <span style={{ fontSize:12, color:"#64748B" }}>g →</span>
-        <span style={{ fontSize:12, color:"#60A5FA", fontWeight:700 }}>{Math.round(prod.kcal100*fct)} kcal</span>
-        <span style={{ fontSize:11, color:"#64748B" }}>P{(prod.p100*fct).toFixed(1)} C{(prod.c100*fct).toFixed(1)} F{(prod.f100*fct).toFixed(1)}</span>
-        <button onClick={()=>onAdd(grams)} style={{ marginLeft:"auto", padding:"7px 14px", borderRadius:6, border:"none", background:"linear-gradient(135deg,#2563EB,#1D4ED8)", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:12 }}>+ Aggiungi</button>
+          style={{ width:70, padding:"7px 8px", borderRadius:6, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text)", fontSize:13, outline:"none" }}/>
+        <span style={{ fontSize:12, color:"var(--text-dim)" }}>g →</span>
+        <span style={{ fontSize:12, color:"var(--accent-light)", fontWeight:700 }}>{Math.round(prod.kcal100*fct)} kcal</span>
+        <span style={{ fontSize:11, color:"var(--text-dim)" }}>P{(prod.p100*fct).toFixed(1)} C{(prod.c100*fct).toFixed(1)} F{(prod.f100*fct).toFixed(1)}</span>
+        <button onClick={()=>onAdd(grams)} style={{ marginLeft:"auto", padding:"7px 14px", borderRadius:6, border:"none", background:"linear-gradient(135deg,var(--accent),var(--accent-deep))", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:12 }}>+ Aggiungi</button>
       </div>
     </div>
   );
