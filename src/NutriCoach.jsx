@@ -244,11 +244,17 @@ const THEMES={
     "--header-from":"#E8EDE3","--header-to":"#F6F7F4",
   },
 };
+// Risolve "auto" nel tema reale in base alle preferenze di sistema
+function resolveTheme(key){
+  if(key!=="auto")return key;
+  return (typeof window!=="undefined"&&window.matchMedia("(prefers-color-scheme: light)").matches)?"fresh":"midnight";
+}
 function applyTheme(key){
-  const t=THEMES[key]||THEMES.midnight;
+  const resolved=resolveTheme(key);
+  const t=THEMES[resolved]||THEMES.midnight;
   const root=document.documentElement;
   Object.entries(t).forEach(([k,v])=>{ if(k.startsWith("--"))root.style.setProperty(k,v); });
-  root.style.setProperty("color-scheme", key==="fresh"?"light":"dark");
+  root.style.setProperty("color-scheme", resolved==="fresh"?"light":"dark");
 }
 
 function AppInner(){
@@ -272,8 +278,15 @@ function AppInner(){
   const [wizard,setWizard]=useState(null); // stato wizard creazione piano
   const [weights,setWeights]=useState({}); // {dateKey: kg}
   const [customFoods,setCustomFoods]=useState({}); // {nome: {p,c,f,kcal,label,unit?}}
-  const [theme,setTheme]=useState(()=>{ try{return localStorage.getItem("nc-theme")||"midnight";}catch(e){return "midnight";} });
+  const [theme,setTheme]=useState(()=>{ try{return localStorage.getItem("nc-theme")||"auto";}catch(e){return "auto";} });
   useEffect(()=>{ applyTheme(theme); try{localStorage.setItem("nc-theme",theme);}catch(e){} },[theme]);
+  // Ascolta i cambi di tema di sistema (rilevante solo in modalità Auto)
+  useEffect(()=>{
+    const mq=window.matchMedia("(prefers-color-scheme: light)");
+    const handler=()=>{ try{ const t=localStorage.getItem("nc-theme")||"auto"; if(t==="auto") applyTheme("auto"); }catch(e){} };
+    mq.addEventListener("change",handler);
+    return ()=>mq.removeEventListener("change",handler);
+  },[]);
   // ---- Autenticazione ----
   const [authUser,setAuthUser]=useState(null);     // utente loggato (o null)
   const [authReady,setAuthReady]=useState(!syncConfigured); // se sync off, l'app parte subito
@@ -859,18 +872,21 @@ function SyncView({syncState,theme,setTheme,authUser,onLogout}){
       <h3 style={{margin:"0 0 4px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>🎨 Tema dell'app</h3>
       <p style={{margin:"0 0 12px",fontSize:12,color:"var(--text-dim)"}}>Scegli l'aspetto. La preferenza viene salvata.</p>
       <div style={{display:"flex",gap:10}}>
-        {[["midnight","Midnight","Scuro, blu notte","#0F172A","#3B82F6"],["fresh","Fresh","Chiaro, verde","#F6F7F4","#2F7D4F"]].map(([id,name,desc,bg,ac])=>{
+        {[["auto","Automatico","Segue il sistema","",""],["midnight","Midnight","Scuro, blu notte","#0F172A","#3B82F6"],["fresh","Fresh","Chiaro, verde","#F6F7F4","#2F7D4F"]].map(([id,name,desc,bg,ac])=>{
           const on=theme===id;
+          const isAuto=id==="auto";
+          const resolved=resolveTheme("auto");
           return (
             <button key={id} onClick={()=>setTheme(id)} style={{flex:1,padding:0,borderRadius:12,border:on?"2px solid var(--accent)":"2px solid var(--border)",background:"transparent",cursor:"pointer",overflow:"hidden",textAlign:"left"}}>
-              <div style={{height:54,background:bg,position:"relative",display:"flex",alignItems:"center",padding:"0 12px",gap:6}}>
-                <div style={{width:22,height:22,borderRadius:6,background:ac}}/>
-                <div style={{flex:1}}><div style={{height:5,width:"60%",background:ac,borderRadius:3,marginBottom:4,opacity:0.9}}/><div style={{height:5,width:"40%",background:id==="fresh"?"#C9D2C4":"#475569",borderRadius:3}}/></div>
+              <div style={{height:54,background:isAuto?"linear-gradient(135deg,#0F172A 50%,#F6F7F4 50%)":bg,position:"relative",display:"flex",alignItems:"center",padding:"0 12px",gap:6}}>
+                {!isAuto&&<div style={{width:22,height:22,borderRadius:6,background:ac}}/>}
+                {!isAuto&&<div style={{flex:1}}><div style={{height:5,width:"60%",background:ac,borderRadius:3,marginBottom:4,opacity:0.9}}/><div style={{height:5,width:"40%",background:id==="fresh"?"#C9D2C4":"#475569",borderRadius:3}}/></div>}
+                {isAuto&&<div style={{width:"100%",textAlign:"center",fontSize:20}}>⚙️</div>}
                 {on&&<div style={{position:"absolute",top:6,right:6,width:18,height:18,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</div>}
               </div>
-              <div style={{padding:"8px 12px",background:"var(--surface)"}}>
-                <div style={{fontSize:13,fontWeight:700,color:on?"var(--accent)":"var(--text)"}}>{name}</div>
-                <div style={{fontSize:10,color:"var(--text-dim)"}}>{desc}</div>
+              <div style={{padding:"8px 10px",background:"var(--surface)"}}>
+                <div style={{fontSize:12,fontWeight:700,color:on?"var(--accent)":"var(--text)"}}>{name}</div>
+                <div style={{fontSize:9,color:"var(--text-dim)"}}>{isAuto?`Ora: ${resolved==="fresh"?"Chiaro":"Scuro"}`:desc}</div>
               </div>
             </button>
           );
@@ -1498,8 +1514,8 @@ function AuthScreen({theme,setTheme,onWelcome}){
         </div>
 
         <div style={{display:"flex",justifyContent:"center",gap:8,marginTop:24}}>
-          {[["midnight","🌙"],["fresh","☀️"]].map(([id,ic])=>(
-            <button key={id} onClick={()=>setTheme(id)} style={{padding:"6px 12px",borderRadius:8,border:theme===id?"1px solid var(--accent)":"1px solid var(--border)",background:"transparent",color:theme===id?"var(--accent)":"var(--text-dim)",cursor:"pointer",fontSize:12}}>{ic} {id==="midnight"?"Scuro":"Chiaro"}</button>
+          {[["auto","⚙️","Auto"],["midnight","🌙","Scuro"],["fresh","☀️","Chiaro"]].map(([id,ic,lbl])=>(
+            <button key={id} onClick={()=>setTheme(id)} style={{padding:"6px 12px",borderRadius:8,border:theme===id?"1px solid var(--accent)":"1px solid var(--border)",background:"transparent",color:theme===id?"var(--accent)":"var(--text-dim)",cursor:"pointer",fontSize:12}}>{ic} {lbl}</button>
           ))}
         </div>
       </div>
