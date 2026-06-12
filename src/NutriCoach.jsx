@@ -1505,7 +1505,7 @@ function StoricoCon({days,plans,historyKeys,setSelectedDate,setTab,setOpenSlot,p
     {/* toggle */}
     <div style={{display:"flex",gap:6,marginBottom:14}}>
       {[["lista","📋 Elenco"],["grafico","📊 Grafico"]].map(([id,lbl])=>(
-        <button key={id} onClick={()=>setView(id)} style={{padding:"8px 16px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:view===id?"var(--accent)":"var(--surface)",color:view===id?"#fff":"var(--text-soft)",border:`1px solid ${view===id?"transparent":"var(--border)"}`}}>{lbl}</button>
+        <button key={id} onClick={()=>setView(id)} style={{padding:"8px 16px",borderRadius:20,border:`1px solid ${view===id?"transparent":"var(--border)"}`,cursor:"pointer",fontSize:12,fontWeight:600,background:view===id?"var(--accent)":"var(--surface)",color:view===id?"#fff":"var(--text-soft)"}}>{lbl}</button>
       ))}
     </div>
 
@@ -1576,7 +1576,7 @@ function StoricoGrafico({days,plans,historyKeys,sum2}){
       {/* toggle metrica */}
       <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
         {[["kcal","🔥 Calorie"],["p","🥩 Proteine"],["c","🍞 Carbo"],["f","🫒 Grassi"]].map(([id,lbl])=>(
-          <button key={id} onClick={()=>setMetric(id)} style={{padding:"6px 12px",borderRadius:16,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:metric===id?colors[id]:"var(--surface)",color:metric===id?"#fff":"var(--text-soft)",border:`1px solid ${metric===id?"transparent":"var(--border)"}`}}>{lbl}</button>
+          <button key={id} onClick={()=>setMetric(id)} style={{padding:"6px 12px",borderRadius:16,border:`1px solid ${metric===id?"transparent":"var(--border)"}`,cursor:"pointer",fontSize:11,fontWeight:600,background:metric===id?colors[id]:"var(--surface)",color:metric===id?"#fff":"var(--text-soft)"}}>{lbl}</button>
         ))}
       </div>
 
