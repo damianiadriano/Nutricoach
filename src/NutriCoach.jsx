@@ -572,9 +572,9 @@ function AppInner(){
             {burned>0&&<div style={{display:"flex",gap:10,marginTop:6,marginBottom:6}}><div style={{flex:1,background:"var(--bg)",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"var(--text-dim)"}}>🔥 BRUCIATE</div><div style={{fontSize:18,fontWeight:800,color:"#FB923C"}}>{burned} kcal</div></div><div style={{flex:1,background:"var(--bg)",borderRadius:10,padding:"10px 12px"}}><div style={{fontSize:10,color:"var(--text-dim)"}}>⚖️ NETTO</div><div style={{fontSize:18,fontWeight:800,color:"#A78BFA"}}>{Math.round(netKcal)} kcal</div></div></div>}
             <div style={{marginTop:8,background:"var(--bg)",borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,borderLeft:`3px solid ${verdict.color}`}}><span style={{fontSize:20}}>{verdict.emoji}</span><span style={{fontSize:13,color:verdict.color,fontWeight:600}}>{verdict.txt}</span></div>
             <div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:12,color:"var(--text-dim)",flex:1}}>⚖️ Peso del giorno {weights[selectedDate]?`: ${weights[selectedDate]} kg`:""}</span>
+              <span style={{fontSize:12,color:"var(--text-dim)",flex:1}}>⚖️ Peso {weights[selectedDate]?`${weights[selectedDate]} kg`:"(non registrato)"}</span>
               <input value={wInput} onChange={e=>setWInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveWeight();}} placeholder={weights[selectedDate]?"aggiorna":"es. 64.5"} inputMode="decimal" style={{width:90,padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none"}}/>
-              <button onClick={saveWeight} style={{padding:"7px 12px",borderRadius:8,border:"none",background:"var(--accent-deep)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12}}>Salva</button>
+              <button onClick={saveWeight} disabled={!wInput.trim()} style={{padding:"7px 12px",borderRadius:8,border:"none",background:wInput.trim()?"linear-gradient(135deg,var(--accent),var(--accent-deep))":"var(--muted)",color:"#fff",fontWeight:700,cursor:wInput.trim()?"pointer":"default",fontSize:12,transition:"background 0.2s"}}>Salva</button>
             </div>
           </div>
 
@@ -587,7 +587,7 @@ function AppInner(){
               {open&&(<div style={{padding:"0 16px 16px"}}>
                 <div style={{display:"flex",gap:8,marginBottom:items.length?12:0}}>
                   <input value={inputs[slot.id]||""} onChange={e=>setInputs(p=>({...p,[slot.id]:e.target.value}))} onKeyDown={e=>{if(e.key==="Enter")addEntry(slot.id);}} placeholder="es: 150g pollo, 80g riso, 2 uova" style={{flex:1,padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none"}}/>
-                  <button onClick={()=>addEntry(slot.id)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>+</button>
+                  <button onClick={()=>addEntry(slot.id)} style={{padding:"10px 14px",borderRadius:8,border:"none",background:(inputs[slot.id]||"").trim()?"linear-gradient(135deg,var(--accent),var(--accent-deep))":"var(--muted)",color:"#fff",fontWeight:700,cursor:(inputs[slot.id]||"").trim()?"pointer":"default",fontSize:13,transition:"background 0.2s"}}>+</button>
                 </div>
                 <div style={{display:"flex",gap:8,marginBottom:8}}>
                   <button onClick={()=>{setSearchSlot(slot.id);setSearchQ("");setSearchRes([]);setSearchErr(null);}} style={{flex:1,padding:"9px",borderRadius:8,border:"1px dashed var(--muted)",background:"transparent",color:"var(--text-soft)",cursor:"pointer",fontSize:12}}>🔍 Cerca prodotto confezionato</button>
@@ -624,7 +624,7 @@ function AppInner(){
               <div style={{flex:"1 1 100px"}}><label style={{fontSize:11,color:"var(--text-dim)",display:"block",marginBottom:4}}>Durata (min)</label><input type="number" value={woDur} onChange={e=>setWoDur(e.target.value)} placeholder="es. 90" style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:14,outline:"none",boxSizing:"border-box"}}/></div>
             </div>
             <input value={woNote} onChange={e=>setWoNote(e.target.value)} placeholder="Nota (facoltativa)" style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:10}}/>
-            <button onClick={addWorkout} style={{width:"100%",padding:"11px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#EA580C,#C2410C)",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14}}>🔥 Registra</button>
+            <button onClick={addWorkout} disabled={!woKcal||parseInt(woKcal)<=0} style={{width:"100%",padding:"11px",borderRadius:8,border:"none",background:woKcal&&parseInt(woKcal)>0?"linear-gradient(135deg,#EA580C,#C2410C)":"var(--muted)",color:"#fff",fontWeight:700,cursor:woKcal&&parseInt(woKcal)>0?"pointer":"default",fontSize:14,transition:"background 0.2s"}}>🔥 Registra</button>
           </div>
           {workouts.length===0?<div style={{background:"var(--surface)",borderRadius:12,padding:24,textAlign:"center",border:"1px solid var(--border)",color:"var(--text-dim)"}}><div style={{fontSize:28,marginBottom:6}}>🏋️</div>Nessun allenamento per questo giorno.</div>:workouts.map(w=>(<div key={w.id} style={{background:"var(--surface)",borderRadius:12,marginBottom:8,padding:"13px 16px",border:"1px solid var(--border)",display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:24}}>{w.icon}</span><div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>{w.label}{w.dur?` · ${w.dur} min`:""}</div>{w.note&&<div style={{fontSize:11,color:"var(--text-dim)"}}>{w.note}</div>}</div><span style={{fontSize:15,fontWeight:800,color:"#FB923C"}}>−{w.kcal}</span><button onClick={()=>removeWorkout(w.id)} style={{background:"none",border:"none",color:"var(--text-dim)",cursor:"pointer",fontSize:16,padding:4}}>×</button></div>))}
         </>)}
@@ -696,7 +696,7 @@ function AppInner(){
                         </div>
                         <div style={{textAlign:"right",whiteSpace:"nowrap"}}>
                           <div style={{fontSize:15,fontWeight:800,color:"var(--accent-light)"}}>{m.kcal}</div>
-                          <div style={{fontSize:9,color:"var(--text-dim)"}}>kcal</div>
+                          <div style={{fontSize:10,color:"var(--text-dim)"}}>kcal</div>
                         </div>
                       </div>
                       {m.ingredienti?.length>0&&<div style={{fontSize:12,color:"var(--text)",marginBottom:6}}>{m.ingredienti.map(i=>`${i.nome} ${i.grammi}g`).join(" · ")}</div>}
@@ -710,7 +710,7 @@ function AppInner(){
                 })}
                 {(()=>{const t=Object.values(menu.data.meals||{}).reduce((a,m)=>({k:a.k+(m.kcal||0),p:a.p+(m.p||0),c:a.c+(m.c||0),f:a.f+(m.f||0)}),{k:0,p:0,c:0,f:0});return(
                   <div style={{background:"var(--surface)",borderRadius:10,padding:"10px 14px",marginBottom:12,border:"1px solid var(--border)",display:"flex",justifyContent:"space-around",textAlign:"center"}}>
-                    {[["Totale",t.k,"var(--accent-light)","kcal"],["Prot",t.p,"var(--accent)","g"],["Carb",t.c,"#F59E0B","g"],["Grassi",t.f,"#10B981","g"]].map(([l,v,c,u])=>(<div key={l}><div style={{fontSize:15,fontWeight:800,color:c}}>{Math.round(v)}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{l} ({u})</div></div>))}
+                    {[["Totale",t.k,"var(--accent-light)","kcal"],["Prot",t.p,"var(--accent)","g"],["Carb",t.c,"#F59E0B","g"],["Grassi",t.f,"#10B981","g"]].map(([l,v,c,u])=>(<div key={l}><div style={{fontSize:15,fontWeight:800,color:c}}>{Math.round(v)}</div><div style={{fontSize:10,color:"var(--text-dim)"}}>{l} ({u})</div></div>))}
                   </div>
                 );})()}
                 {menu.data.nota&&<div style={{fontSize:11,color:"var(--text-soft)",lineHeight:1.5,marginBottom:12,padding:"0 4px"}}>💡 {menu.data.nota}</div>}
@@ -893,7 +893,7 @@ function SyncView({syncState,theme,setTheme,authUser,onLogout}){
               </div>
               <div style={{padding:"8px 10px",background:"var(--surface)"}}>
                 <div style={{fontSize:12,fontWeight:700,color:on?"var(--accent)":"var(--text)"}}>{name}</div>
-                <div style={{fontSize:9,color:"var(--text-dim)"}}>{isAuto?`Ora: ${resolved==="fresh"?"Chiaro":"Scuro"}`:desc}</div>
+                <div style={{fontSize:10,color:"var(--text-dim)"}}>{isAuto?`Ora: ${resolved==="fresh"?"Chiaro":"Scuro"}`:desc}</div>
               </div>
             </button>
           );
@@ -1069,7 +1069,7 @@ function CoachView({days,plans,weights,setTab}){
             </svg>
             <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
               <span style={{fontSize:24,fontWeight:800,color:scoreColor}}>{score}</span>
-              <span style={{fontSize:9,color:"var(--text-dim)"}}>/100</span>
+              <span style={{fontSize:10,color:"var(--text-dim)"}}>/100</span>
             </div>
           </div>
           <div>
@@ -1162,7 +1162,7 @@ function WeightView({weights,wInput,setWInput,saveWeight,removeWeight,selectedDa
           <input type="date" value={selectedDate} max={todayKey()} onChange={e=>setSelectedDate(e.target.value)} style={{padding:"10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,colorScheme:"dark"}}/>
           <input value={wInput} onChange={e=>setWInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveWeight();}} placeholder={weights[selectedDate]?`Attuale: ${weights[selectedDate]} kg`:"es. 64.5"} inputMode="decimal" style={inp}/>
           <span style={{fontSize:13,color:"var(--text-dim)"}}>kg</span>
-          <button onClick={saveWeight} style={{padding:"11px 16px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>Salva</button>
+          <button onClick={saveWeight} disabled={!wInput.trim()} style={{padding:"11px 16px",borderRadius:8,border:"none",background:wInput.trim()?"linear-gradient(135deg,var(--accent),var(--accent-deep))":"var(--muted)",color:"#fff",fontWeight:700,cursor:wInput.trim()?"pointer":"default",fontSize:13,transition:"background 0.2s"}}>Salva</button>
         </div>
         <p style={{margin:0,fontSize:11,color:"var(--text-dim)"}}>Per coerenza pesati sempre nelle stesse condizioni: mattino, a digiuno, dopo il bagno.</p>
       </div>
@@ -1269,7 +1269,7 @@ function Wizard({wizard,setWizard,onSave,analysis}){
   return(
     <div>
       {/* progress */}
-      <div style={{display:"flex",gap:4,marginBottom:18}}>{STEPS.map((s,i)=>(<div key={i} style={{flex:1,textAlign:"center"}}><div style={{height:4,borderRadius:2,background:i<=step?"var(--accent)":"var(--border)",marginBottom:5}}/><div style={{fontSize:9,color:i<=step?"var(--accent-light)":"var(--muted)"}}>{s}</div></div>))}</div>
+      <div style={{display:"flex",gap:4,marginBottom:18}}>{STEPS.map((s,i)=>(<div key={i} style={{flex:1,textAlign:"center"}}><div style={{height:4,borderRadius:2,background:i<=step?"var(--accent)":"var(--border)",marginBottom:5}}/><div style={{fontSize:10,color:i<=step?"var(--accent-light)":"var(--muted)",fontWeight:i===step?700:400}}>{s}</div></div>))}</div>
 
       <div style={{background:"var(--surface)",borderRadius:14,padding:18,border:"1px solid var(--border)",marginBottom:14}}>
         {step===0&&(<>
@@ -1334,7 +1334,7 @@ function Wizard({wizard,setWizard,onSave,analysis}){
           </div>
           <div style={{background:"linear-gradient(135deg,var(--header-from),var(--surface))",borderRadius:10,padding:14,marginBottom:14}}>
             <div style={{fontSize:12,fontWeight:700,color:"#93C5FD",marginBottom:10}}>🎯 Target macro (giorno normale)</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>{[["Kcal",preview.targetKcal,"var(--accent-light)"],["Prot",preview.protein+"g","var(--accent)"],["Carb",preview.carbs+"g","#F59E0B"],["Grassi",preview.fat+"g","#10B981"]].map(([k,v,c])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{k}</div></div>))}</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>{[["Kcal",preview.targetKcal,"var(--accent-light)"],["Prot",preview.protein+"g","var(--accent)"],["Carb",preview.carbs+"g","#F59E0B"],["Grassi",preview.fat+"g","#10B981"]].map(([k,v,c])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:10,color:"var(--text-dim)"}}>{k}</div></div>))}</div>
             <div style={{fontSize:11,color:"var(--text-dim)",marginTop:10,paddingTop:10,borderTop:"1px solid var(--border)"}}>Giorni sport 🎾: {preview.sport.kcal} kcal · {preview.sport.c}g carbo</div>
           </div>
           <label style={lbl}>📅 Il piano è valido a partire dal</label>
@@ -1375,14 +1375,14 @@ function PlanView({plans,onNew,onEdit,onOpenMenu}){
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>Valido dal {fmtShort(p.validFrom)}</span>
-                  {isCurrent&&<span style={{fontSize:10,background:"var(--accent-deep)",color:"#fff",borderRadius:8,padding:"2px 8px",fontWeight:700}}>ATTIVO</span>}
+                  {isCurrent&&<span style={{fontSize:10,background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",borderRadius:8,padding:"2px 8px",fontWeight:700}}>ATTIVO</span>}
                 </div>
                 <div style={{fontSize:11,color:"var(--text-dim)",marginTop:3}}>{({dimagrire:"🔻 Dimagrire",ricomposizione:"♻️ Ricomposizione",mantenimento:"⚖️ Mantenimento",massa:"🔺 Massa"})[p.goal]} · {p.weight}kg · {p.sex==="m"?"Uomo":"Donna"} {p.age}a</div>
               </div>
-              <button onClick={()=>onEdit(p)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--accent-light)",cursor:"pointer",fontSize:12}}>Duplica</button>
+              <button onClick={()=>onEdit(p)} style={{padding:"6px 12px",borderRadius:8,border:"1px solid var(--border)",background:"transparent",color:"var(--accent-light)",cursor:"pointer",fontSize:12}}>Usa come base</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,background:"var(--bg)",borderRadius:8,padding:10}}>
-              {[["Kcal",p.targetKcal,"var(--accent-light)"],["Prot",p.protein+"g","var(--accent)"],["Carb",p.carbs+"g","#F59E0B"],["Grassi",p.fat+"g","#10B981"]].map(([k,v,c])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{k}</div></div>))}
+              {[["Kcal",p.targetKcal,"var(--accent-light)"],["Prot",p.protein+"g","var(--accent)"],["Carb",p.carbs+"g","#F59E0B"],["Grassi",p.fat+"g","#10B981"]].map(([k,v,c])=>(<div key={k} style={{textAlign:"center"}}><div style={{fontSize:16,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:10,color:"var(--text-dim)"}}>{k}</div></div>))}
             </div>
             {p.learnedAdjustment?<div style={{fontSize:10,color:"#6EE7B7",marginTop:8}}>🧠 Include aggiustamento dai dati: {p.learnedAdjustment>0?"+":""}{p.learnedAdjustment} kcal</div>:null}
             {isCurrent&&(
@@ -1495,7 +1495,7 @@ function StoricoCon({days,plans,historyKeys,setSelectedDate,setTab,setOpenSlot,p
         <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
           {[["Kcal",avg.kcal,"var(--accent-light)"],["Prot",avg.p,"var(--accent)"],["Carb",avg.c,"#F59E0B"],["Grassi",avg.f,"#10B981"],["🔥Bruc",avg.b,"#FB923C"]].map(([k,v,c])=>(
             <div key={k} style={{background:"var(--bg)55",borderRadius:8,padding:"10px 6px",textAlign:"center"}}>
-              <div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:9,color:"var(--text-dim)"}}>{k}</div>
+              <div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div><div style={{fontSize:10,color:"var(--text-dim)"}}>{k}</div>
             </div>
           ))}
         </div>
@@ -1604,7 +1604,7 @@ function StoricoGrafico({days,plans,historyKeys,sum2}){
             return(
               <g key={v.k} style={{cursor:"pointer"}}>
                 <rect x={x(i)-bW/2} y={y(v.v)} width={bW} height={barH} rx="3" fill={col} opacity="0.85"/>
-                <text x={x(i)} y={H-padB+12} fill="var(--text-dim)" fontSize="8" textAnchor="middle">{fmtDate(v.k).slice(0,2)}{new Date(v.k+"T12:00:00").getDate()}</text>
+                <text x={x(i)} y={H-padB+12} fill="var(--text-dim)" fontSize="8" textAnchor="middle">{new Date(v.k+"T12:00:00").getDate()}/{new Date(v.k+"T12:00:00").getMonth()+1}</text>
               </g>
             );
           })}
@@ -1686,7 +1686,7 @@ function AuthScreen({theme,setTheme,onWelcome}){
 
           {mode!=="forgot"&&(<>
             <div style={{display:"flex",alignItems:"center",gap:10,margin:"14px 0"}}><div style={{flex:1,height:1,background:"var(--border)"}}/><span style={{fontSize:11,color:"var(--text-dim)"}}>oppure</span><div style={{flex:1,height:1,background:"var(--border)"}}/></div>
-            <button onClick={async()=>{setMsg(null);setBusy(true);const r=await signInWithGoogle();if(r&&r.error){setBusy(false);setMsg({t:"err",x:r.error});}}} disabled={busy} style={{width:"100%",padding:"12px",borderRadius:10,border:"1px solid var(--border)",background:"#FFFFFF",color:"#1f1f1f",fontWeight:600,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
+            <button onClick={async()=>{setMsg(null);setBusy(true);const r=await signInWithGoogle();if(r&&r.error){setBusy(false);setMsg({t:"err",x:r.error});}}} disabled={busy} style={{width:"100%",padding:"12px",borderRadius:10,border:"1px solid var(--border)",background:"#FFFFFF",color:"#1A1A1A",fontWeight:600,boxShadow:"0 1px 4px rgba(0,0,0,0.18)",fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}>
               <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571.001-.001 6.19 5.238 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
               Continua con Google
             </button>
