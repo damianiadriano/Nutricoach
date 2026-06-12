@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, Component } from "react";
-import { syncConfigured, getSession, aliasOf, signUp, signIn, signInWithGoogle, signOut, resetPassword, updatePassword, updateAlias, onAuthChange, pullRemote, pushRemote } from "./sync.js";
+import { syncConfigured, getSession, getJwt, aliasOf, signUp, signIn, signInWithGoogle, signOut, resetPassword, updatePassword, updateAlias, onAuthChange, pullRemote, pushRemote } from "./sync.js";
 import { estimateFromText, estimateFromPhoto, generateMenu } from "./estimate.js";
 import BarcodeScanner from "./BarcodeScanner.jsx";
 import { pushSupported, pushPermission, subscribePush, unsubscribePush, updatePushPrefs, getCurrentSubscription, notifyWeightMilestone, notifyPlanExpiring } from "./push.js";
@@ -1457,13 +1457,6 @@ function NotificationSettings({authUser}){
       <p style={{margin:0,fontSize:12,color:"var(--text-dim)",lineHeight:1.5}}>Le notifiche push non sono supportate su questo browser. Assicurati di aver installato NutriCoach sulla schermata Home (iOS 16.4+ richiesto).</p>
     </div>
   );
-
-  const getJwt=async()=>{
-    const {createClient}=await import("@supabase/supabase-js");
-    const sb=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_ANON_KEY,{auth:{storageKey:"nc-auth"}});
-    const {data:{session}}=await sb.auth.getSession();
-    return session?.access_token||null;
-  };
 
   const toggle=async()=>{
     setBusy(true);setMsg(null);
