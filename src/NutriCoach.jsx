@@ -1443,18 +1443,22 @@ function ProductRow({ prod, onAdd }) {
 function NotificationSettings({authUser}){
   const [perm,setPerm]=useState(()=>pushPermission());
   const [subscribed,setSubscribed]=useState(false);
-  const [prefs,setPrefs]=useState({meal_reminder:true,meal_times:["08:30","13:00"],weigh_reminder:true,weigh_day:1,weigh_time:"07:30"});
+  const [prefs,setPrefs]=useState({
+    notifications_enabled:true,
+    notify_time:"20:00", // UTC — corrisponde a 22:00 ora italiana (estate, UTC+2)
+    meal_reminder:true,
+    weigh_reminder:true,
+    menu_reminder:true,
+  });
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState(null);
 
-  useEffect(()=>{
-    getCurrentSubscription().then(s=>setSubscribed(!!s));
-  },[]);
+  useEffect(()=>{ getCurrentSubscription().then(s=>setSubscribed(!!s)); },[]);
 
   if(!pushSupported()) return(
     <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
       <h3 style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>🔔 Notifiche</h3>
-      <p style={{margin:0,fontSize:12,color:"var(--text-dim)",lineHeight:1.5}}>Le notifiche push non sono supportate su questo browser. Assicurati di aver installato NutriCoach sulla schermata Home (iOS 16.4+ richiesto).</p>
+      <p style={{margin:0,fontSize:12,color:"var(--text-dim)",lineHeight:1.5}}>Le notifiche non sono supportate su questo browser. Installa NutriCoach sulla schermata Home (iOS 16.4+ richiesto).</p>
     </div>
   );
 
@@ -1468,7 +1472,7 @@ function NotificationSettings({authUser}){
     }else{
       const jwt=await getJwt();
       const r=await subscribePush(jwt,prefs);
-      if(r.ok){setSubscribed(true);setPerm("granted");setMsg({t:"ok",x:"Notifiche attivate! Riceverai i promemoria."});}
+      if(r.ok){setSubscribed(true);setPerm("granted");setMsg({t:"ok",x:"✅ Notifiche attivate!"});}
       else setMsg({t:"err",x:r.error});
     }
     setBusy(false);
@@ -1483,11 +1487,18 @@ function NotificationSettings({authUser}){
     setBusy(false);
   };
 
-  const DOW_IT=["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
+  // Toggle per ogni tipo di notifica
+  const Toggle=({on,onToggle})=>(
+    <button onClick={onToggle} style={{width:42,height:24,borderRadius:12,border:"none",background:on?"var(--accent)":"var(--muted)",cursor:"pointer",position:"relative",flexShrink:0,transition:"background 0.2s"}}>
+      <div style={{position:"absolute",top:3,left:on?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
+    </button>
+  );
+
   const inp2={padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--bg)",color:"var(--text)",fontSize:13,outline:"none"};
 
   return(
     <div style={{background:"var(--surface)",borderRadius:12,padding:16,marginBottom:14,border:"1px solid var(--border)"}}>
+      {/* Header con toggle globale */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <h3 style={{margin:0,fontSize:14,fontWeight:700,color:"var(--text-strong)"}}>🔔 Notifiche</h3>
         <button onClick={toggle} disabled={busy} style={{padding:"7px 14px",borderRadius:20,border:"none",background:subscribed?"#3B1212":"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:subscribed?"#F87171":"#fff",fontWeight:700,cursor:"pointer",fontSize:12,transition:"all 0.2s"}}>
@@ -1495,82 +1506,65 @@ function NotificationSettings({authUser}){
         </button>
       </div>
 
-      {perm==="denied"&&<div style={{background:"#422006",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#FBBF24",marginBottom:10,lineHeight:1.5}}>⚠️ Hai bloccato le notifiche sul browser. Per riattivarle: Impostazioni → Safari → NutriCoach → Notifiche → Consenti.</div>}
+      {perm==="denied"&&<div style={{background:"#422006",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#FBBF24",marginBottom:10,lineHeight:1.5}}>⚠️ Notifiche bloccate. Vai in Impostazioni → Safari → NutriCoach → Notifiche → Consenti.</div>}
 
-      {subscribed&&(
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {/* Promemoria pasti */}
-          <div style={{background:"var(--bg)",borderRadius:10,padding:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:prefs.meal_reminder?10:0}}>
-              <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>🥗 Promemoria pasti</span>
-              <button onClick={()=>setPrefs(p=>({...p,meal_reminder:!p.meal_reminder}))} style={{width:42,height:24,borderRadius:12,border:"none",background:prefs.meal_reminder?"var(--accent)":"var(--muted)",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
-                <div style={{position:"absolute",top:3,left:prefs.meal_reminder?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
-              </button>
-            </div>
-            {prefs.meal_reminder&&(
-              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                {(prefs.meal_times||[]).map((t,i)=>(
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:11,color:"var(--text-dim)"}}>{i===0?"Colazione":"Pranzo"}</span>
-                    <input type="time" value={t} onChange={e=>{const times=[...(prefs.meal_times||[])];times[i]=e.target.value;setPrefs(p=>({...p,meal_times:times}));}} style={{...inp2,colorScheme:"dark",width:100}}/>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Pesata settimanale */}
-          <div style={{background:"var(--bg)",borderRadius:10,padding:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:prefs.weigh_reminder?10:0}}>
-              <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>⚖️ Pesata settimanale</span>
-              <button onClick={()=>setPrefs(p=>({...p,weigh_reminder:!p.weigh_reminder}))} style={{width:42,height:24,borderRadius:12,border:"none",background:prefs.weigh_reminder?"var(--accent)":"var(--muted)",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
-                <div style={{position:"absolute",top:3,left:prefs.weigh_reminder?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
-              </button>
-            </div>
-            {prefs.weigh_reminder&&(
-              <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:11,color:"var(--text-dim)"}}>Giorno</span>
-                  <select value={prefs.weigh_day??1} onChange={e=>setPrefs(p=>({...p,weigh_day:parseInt(e.target.value)}))} style={{...inp2,colorScheme:"dark"}}>
-                    {DOW_IT.map((d,i)=><option key={i} value={i}>{d}</option>)}
-                  </select>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontSize:11,color:"var(--text-dim)"}}>Ora</span>
-                  <input type="time" value={prefs.weigh_time||"07:30"} onChange={e=>setPrefs(p=>({...p,weigh_time:e.target.value}))} style={{...inp2,colorScheme:"dark",width:100}}/>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Proposta menù */}
-          <div style={{background:"var(--bg)",borderRadius:10,padding:12}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:prefs.menu_reminder!==false?10:0}}>
-              <div>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>🍽️ Proposta menù</span>
-                <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>Ricevi il menù del giorno dopo</div>
-              </div>
-              <button onClick={()=>setPrefs(p=>({...p,menu_reminder:p.menu_reminder===false?true:false}))} style={{width:42,height:24,borderRadius:12,border:"none",background:prefs.menu_reminder!==false?"var(--accent)":"var(--muted)",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
-                <div style={{position:"absolute",top:3,left:prefs.menu_reminder!==false?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
-              </button>
-            </div>
-            {prefs.menu_reminder!==false&&(
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:11,color:"var(--text-dim)"}}>Orario</span>
-                <input type="time" value={prefs.menu_time||"19:00"} onChange={e=>setPrefs(p=>({...p,menu_time:e.target.value}))} style={{...inp2,colorScheme:"dark",width:100}}/>
-                <span style={{fontSize:10,color:"var(--text-dim)"}}>ora locale</span>
-              </div>
-            )}
-          </div>
-
-          <button onClick={savePrefs} disabled={busy} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>
-            {busy?"…":"Salva preferenze"}
-          </button>
-        </div>
+      {!subscribed&&perm!=="denied"&&(
+        <p style={{margin:0,fontSize:11,color:"var(--text-dim)",lineHeight:1.6}}>
+          Ricevi ogni sera un unico riepilogo con: pasti non registrati, promemoria pesata (se mancante da 4 giorni) e proposta menù per domani. L'app deve essere installata sulla schermata Home (iPhone).
+        </p>
       )}
 
+      {subscribed&&(<>
+        {/* Orario notifica */}
+        <div style={{background:"var(--bg)",borderRadius:10,padding:12,marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>🕐 Orario riepilogo serale</div>
+              <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>Tutte le notifiche in un unico messaggio</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <input type="time"
+              value={(()=>{
+                // mostra l'ora italiana (UTC+2 estate) all'utente
+                const [h,m]=(prefs.notify_time||"20:00").split(":").map(Number);
+                const localH=(h+2)%24;
+                return `${String(localH).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+              })()}
+              onChange={e=>{
+                // converte ora italiana → UTC prima di salvare
+                const [h,m]=e.target.value.split(":").map(Number);
+                const utcH=(h-2+24)%24;
+                setPrefs(p=>({...p,notify_time:`${String(utcH).padStart(2,"0")}:${String(m).padStart(2,"0")}`}));
+              }}
+              style={{...inp2,colorScheme:"dark",width:110}}/>
+            <span style={{fontSize:11,color:"var(--text-dim)"}}>ora italiana · default 22:00</span>
+          </div>
+        </div>
+
+        {/* Tipi di notifica */}
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+          {[
+            ["meal_reminder","📝 Pasti non registrati","Solo se meno di 4 pasti inseriti oggi"],
+            ["weigh_reminder","⚖️ Pesata mancante","Solo se nessun peso negli ultimi 4 giorni"],
+            ["menu_reminder","🍽️ Proposta menù domani","Generata da AI in base al tuo piano"],
+          ].map(([key,label,desc])=>(
+            <div key={key} style={{background:"var(--bg)",borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>{label}</div>
+                <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>{desc}</div>
+              </div>
+              <Toggle on={prefs[key]!==false} onToggle={()=>setPrefs(p=>({...p,[key]:p[key]===false?true:false}))}/>
+            </div>
+          ))}
+        </div>
+
+        <button onClick={savePrefs} disabled={busy} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>
+          {busy?"…":"Salva preferenze"}
+        </button>
+      </>)}
+
       {msg&&<div style={{background:msg.t==="ok"?"#0F2A1E":"#3B1212",border:`1px solid ${msg.t==="ok"?"#059669":"#7F1D1D"}`,borderRadius:8,padding:"8px 12px",fontSize:12,color:msg.t==="ok"?"#6EE7B7":"#FCA5A5",marginTop:10}}>{msg.x}</div>}
-      {!subscribed&&perm!=="denied"&&<p style={{margin:"10px 0 0",fontSize:11,color:"var(--text-dim)",lineHeight:1.5}}>Attiva per ricevere promemoria pasti e pesata. Richiederebbe il permesso notifiche. L'app deve essere installata sulla schermata Home (iPhone).</p>}
     </div>
   );
 }
