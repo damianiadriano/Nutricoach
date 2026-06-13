@@ -6,12 +6,6 @@
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 
-webpush.setVapidDetails(
-  "mailto:support@nutricoach.app",
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
-
 const MODEL = "gemini-2.5-flash-lite";
 
 function makeAdmin() {
@@ -89,7 +83,7 @@ async function safeSend(pushSub, payload, admin, subId) {
 }
 
 export default async function handler(req, res) {
-  // Autenticazione: header Authorization (Vercel) o x-cron-secret (esterno)
+  // Autenticazione: Vercel invia automaticamente CRON_SECRET come Bearer
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
     const auth = req.headers.authorization || "";
@@ -97,6 +91,26 @@ export default async function handler(req, res) {
     if (auth !== `Bearer ${cronSecret}` && xsecret !== cronSecret)
       return res.status(401).json({ error: "unauthorized" });
   }
+
+  // Verifica env var critici prima di procedere
+  const missing = [];
+  if (!process.env.VAPID_PUBLIC_KEY)          missing.push("VAPID_PUBLIC_KEY");
+  if (!process.env.VAPID_PRIVATE_KEY)         missing.push("VAPID_PRIVATE_KEY");
+  if (!process.env.VITE_SUPABASE_URL)         missing.push("VITE_SUPABASE_URL");
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+  if (missing.length) {
+    console.error("[push-cron] Env var mancanti:", missing.join(", "));
+    return res.status(500).json({ error: "Config mancante", missing });
+  }
+
+  // Inizializza webpush qui (non a livello di modulo, per evitare errori di avvio)
+  webpush.setVapidDetails(
+    "mailto:support@nutricoach.app",
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY
+  );
+
+  console.log("[push-cron] Start", new Date().toISOString());
 
   const admin = makeAdmin();
   const nowUTC = new Date();
@@ -167,5 +181,6 @@ export default async function handler(req, res) {
     ok ? sent++ : skipped++;
   }
 
+  console.log("[push-cron] Done — sent:", sent, "skipped:", skipped);
   return res.status(200).json({ sent, skipped, at: nowUTC.toISOString() });
 }
