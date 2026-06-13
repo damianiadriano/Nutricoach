@@ -1543,6 +1543,26 @@ function NotificationSettings({authUser}){
             )}
           </div>
 
+          {/* Proposta menù */}
+          <div style={{background:"var(--bg)",borderRadius:10,padding:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:prefs.menu_reminder!==false?10:0}}>
+              <div>
+                <span style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>🍽️ Proposta menù</span>
+                <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>Ricevi il menù del giorno dopo</div>
+              </div>
+              <button onClick={()=>setPrefs(p=>({...p,menu_reminder:p.menu_reminder===false?true:false}))} style={{width:42,height:24,borderRadius:12,border:"none",background:prefs.menu_reminder!==false?"var(--accent)":"var(--muted)",cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+                <div style={{position:"absolute",top:3,left:prefs.menu_reminder!==false?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
+              </button>
+            </div>
+            {prefs.menu_reminder!==false&&(
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:11,color:"var(--text-dim)"}}>Orario</span>
+                <input type="time" value={prefs.menu_time||"19:00"} onChange={e=>setPrefs(p=>({...p,menu_time:e.target.value}))} style={{...inp2,colorScheme:"dark",width:100}}/>
+                <span style={{fontSize:10,color:"var(--text-dim)"}}>ora locale</span>
+              </div>
+            )}
+          </div>
+
           <button onClick={savePrefs} disabled={busy} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:"linear-gradient(135deg,var(--accent),var(--accent-deep))",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>
             {busy?"…":"Salva preferenze"}
           </button>
