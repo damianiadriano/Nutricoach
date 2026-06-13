@@ -1,53 +1,48 @@
 // ============================================================
-//  public/sw-push.js
-//  Service worker custom che gestisce gli eventi push.
-//  Viene importato dal service worker generato da Vite PWA
-//  tramite la config injectManifest (vedi vite.config.js).
-//
-//  NOTA: con generateSW (la config che usiamo) Vite genera
-//  automaticamente il SW. Per aggiungere il push handler dobbiamo
-//  passare a injectManifest e usare questo file come base.
+//  src/sw-push.js — Service Worker con push handler
 // ============================================================
-
-// Questo file è incluso tramite il campo `swSrc` nella config Vite PWA.
-
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
+
+// Attiva subito senza aspettare il reload (importante su iOS)
+self.skipWaiting();
+self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-// ---- Push event: mostra la notifica ----
+// ---- Push: ricevi e mostra la notifica ----
 self.addEventListener("push", event => {
   if (!event.data) return;
   let data = {};
   try { data = event.data.json(); } catch (e) { return; }
-  event.waitUntil(
-    self.registration.showNotification(data.title || "NutriCoach", {
-      body: data.body || "",
-      icon: data.icon || "/icon-192.png",
-      badge: data.badge || "/icon-192.png",
-      tag: data.tag || "nutricoach",
-      data: data.data || {},
-      actions: data.actions || [],
-    })
-  );
+
+  const options = {
+    body: data.body || "",
+    icon: data.icon || "/icon-192.png",
+    badge: data.badge || "/icon-192.png",
+    tag: data.tag || "nutricoach",
+    data: data.data || {},
+    requireInteraction: false,
+  };
+
+  event.waitUntil(self.registration.showNotification(data.title || "NutriCoach", options));
 });
 
-// ---- Click sulla notifica: apri l'app ----
+// ---- Click sulla notifica ----
 self.addEventListener("notificationclick", event => {
   event.notification.close();
-  const url = event.notification.data?.url || "/";
+  const url = (event.notification.data?.url) || "/";
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then(windowClients => {
-      // Se l'app è già aperta, portala in foreground
-      const existing = windowClients.find(c => c.url.includes(self.location.origin));
-      if (existing) return existing.focus();
-      return clients.openWindow(self.location.origin + url);
-    })
+    self.clients.matchAll({ type: "window", includeUncontrolled: true })
+      .then(list => {
+        const found = list.find(c => c.url.startsWith(self.location.origin));
+        if (found) return found.focus();
+        return self.clients.openWindow(self.location.origin + url);
+      })
   );
 });
 
-// ---- Push subscription change (subscription rinnovata dal browser) ----
+// ---- Subscription rinnovata dal browser ----
 self.addEventListener("pushsubscriptionchange", event => {
   event.waitUntil(
     self.registration.pushManager.subscribe({ userVisibleOnly: true })
