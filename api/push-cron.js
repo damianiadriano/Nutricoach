@@ -1,10 +1,7 @@
 // ============================================================
-//  /api/push-cron.js
-//  3 cron giornalieri (piano gratuito Vercel):
-//    ?slot=breakfast  06:30 UTC → promemoria colazione
-//    ?slot=lunch      11:00 UTC → promemoria pranzo
-//    ?slot=menu       17:00 UTC → proposta menù domani (ora locale utente)
-//    ?slot=weigh      05:30 UTC lunedì → pesata settimanale
+//  /api/push-cron.js — Notifica giornaliera consolidata
+//  Un solo cron al giorno, all'orario scelto dall'utente (UTC).
+//  Logica intelligente: invia solo se c'è qualcosa di rilevante.
 // ============================================================
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
@@ -25,44 +22,58 @@ function makeAdmin() {
   );
 }
 
-// Converte un orario HH:MM in ora UTC considerando il fuso
-function localTimeToUTCHour(time, timezone) {
-  try {
-    const [h, m] = time.split(":").map(Number);
-    const now = new Date();
-    // Crea una data "oggi" alle HH:MM nel fuso locale dell'utente
-    const localStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit"
-    }).format(now);
-    const local = new Date(`${localStr}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:00`);
-    // Converti in UTC
-    const utcParts = new Intl.DateTimeFormat("en-US", {
-      timeZone: "UTC", hour: "numeric", minute: "2-digit", hour12: false
-    }).formatToParts(local);
-    const utcH = parseInt(utcParts.find(p => p.type === "hour")?.value || "0");
-    const utcM = parseInt(utcParts.find(p => p.type === "minute")?.value || "0");
-    return { h: utcH, m: utcM };
-  } catch {
-    return null;
-  }
-}
-
-// Genera il menù del giorno con Gemini
+// Genera proposta menù compatta
 async function generateMenuText(plan) {
-  if (!plan || !process.env.GEMINI_API_KEY) return null;
-  const prompt = `Proponi brevemente il menù di domani per un piano ${plan.goal || "ricomposizione"}, 
-target ${plan.targetKcal || 1850} kcal, ${plan.protein || 127}g proteine. 
-Formato compatto: "Colazione: ..., Pranzo: ..., Cena: ..." in massimo 2 righe. Solo il testo, niente altro.`;
+  if (!process.env.GEMINI_API_KEY) return "Apri l'app per generare il menù di domani.";
+  const prompt = `Nutrizionista italiano. Proponi menù di domani in UNA riga.
+Piano: ${plan?.goal || "ricomposizione"}, ${plan?.targetKcal || 1850} kcal.
+Formato esatto: "🌅 yogurt+avena | 🥗 riso+pollo | 🌙 salmone+verdure"
+Solo il testo.`;
   try {
     const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
       { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.8, maxOutputTokens: 200 } }) }
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.8, maxOutputTokens: 80 }
+        }) }
     );
     const data = await r.json();
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
-  } catch { return null; }
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "Apri l'app per generare il menù.";
+  } catch { return "Apri l'app per generare il menù di domani."; }
+}
+
+// Conta i pasti registrati nelle ultime 24h a partire dalla mezzanotte locale
+function countMealsToday(payload) {
+  if (!payload?.days) return 0;
+  const today = new Date().toISOString().slice(0, 10);
+  // considera oggi e ieri per coprire il caso fuso orario
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  let count = 0;
+  for (const key of [today, yesterday]) {
+    const day = payload.days[key];
+    if (!day?.logs) continue;
+    for (const slot of Object.values(day.logs)) {
+      if (Array.isArray(slot) && slot.length > 0) count++;
+    }
+  }
+  return count;
+}
+
+// Controlla se c'è almeno una pesata negli ultimi 4 giorni
+function hasRecentWeight(payload) {
+  if (!payload?.weights) return false;
+  const cutoff = new Date(Date.now() - 4 * 86400000).toISOString().slice(0, 10);
+  return Object.keys(payload.weights).some(k => k >= cutoff);
+}
+
+// Ottieni il piano attivo
+function getActivePlan(payload) {
+  if (!payload?.plans?.length) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  return payload.plans
+    .filter(p => p.validFrom <= today)
+    .sort((a, b) => b.validFrom.localeCompare(a.validFrom))[0] || null;
 }
 
 async function safeSend(pushSub, payload, admin, subId) {
@@ -78,15 +89,18 @@ async function safeSend(pushSub, payload, admin, subId) {
 }
 
 export default async function handler(req, res) {
+  // Autenticazione: header Authorization (Vercel) o x-cron-secret (esterno)
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`)
-    return res.status(401).json({ error: "unauthorized" });
+  if (cronSecret) {
+    const auth = req.headers.authorization || "";
+    const xsecret = req.headers["x-cron-secret"] || "";
+    if (auth !== `Bearer ${cronSecret}` && xsecret !== cronSecret)
+      return res.status(401).json({ error: "unauthorized" });
+  }
 
-  const slot = req.query?.slot || "breakfast";
   const admin = makeAdmin();
-  const now = new Date();
-  const nowUTCH = now.getUTCHours();
-  const nowUTCM = now.getUTCMinutes();
+  const nowUTC = new Date();
+  const nowUTCMinutes = nowUTC.getUTCHours() * 60 + nowUTC.getUTCMinutes();
 
   const { data: subs, error } = await admin.from("push_subscriptions").select("*");
   if (error) return res.status(500).json({ error: error.message });
@@ -95,67 +109,70 @@ export default async function handler(req, res) {
 
   for (const sub of subs || []) {
     const prefs = sub.prefs || {};
-    const pushSub = sub.subscription;
-    let payload = null;
 
-    if (slot === "breakfast" && prefs.meal_reminder !== false) {
-      payload = JSON.stringify({
-        title: "🌅 Buongiorno! Hai fatto colazione?",
-        body: "Registra la colazione su NutriCoach per iniziare bene la giornata.",
-        icon: "/icon-192.png", badge: "/icon-192.png",
-        tag: "meal-breakfast", data: { url: "/" },
-      });
-    }
+    // Notifiche globalmente disattivate
+    if (prefs.notifications_enabled === false) { skipped++; continue; }
 
-    if (slot === "lunch" && prefs.meal_reminder !== false) {
-      payload = JSON.stringify({
-        title: "🥗 Ora di pranzo!",
-        body: "Hai già registrato il pranzo? Tieniti in linea con il target calorico.",
-        icon: "/icon-192.png", badge: "/icon-192.png",
-        tag: "meal-lunch", data: { url: "/" },
-      });
-    }
+    // Controlla se siamo nell'orario di notifica dell'utente (±30 min in UTC)
+    const notifyTime = prefs.notify_time || "20:00";
+    const [nh, nm] = notifyTime.split(":").map(Number);
+    const targetMinutes = nh * 60 + nm;
+    if (Math.abs(nowUTCMinutes - targetMinutes) > 30) { skipped++; continue; }
 
-    if (slot === "weigh" && prefs.weigh_reminder !== false) {
-      payload = JSON.stringify({
-        title: "⚖️ Giorno della pesata",
-        body: "Pesati a digiuno, dopo il bagno. Registra il peso per tracciare il trend.",
-        icon: "/icon-192.png", badge: "/icon-192.png",
-        tag: "weigh-reminder", data: { url: "/?tab=peso" },
-      });
-    }
+    // Leggi i dati dell'utente da app_data per la logica intelligente
+    let userPayload = null;
+    try {
+      const { data: appData } = await admin.from("app_data")
+        .select("payload").eq("user_id", sub.user_id).maybeSingle();
+      userPayload = appData?.payload || null;
+    } catch (e) { console.warn("appData read:", e.message); }
 
-    if (slot === "menu" && prefs.menu_reminder !== false) {
-      // Controlla se l'ora locale dell'utente corrisponde all'orario scelto (default 19:00)
-      const timezone = prefs.timezone || "Europe/Rome";
-      const menuTime = prefs.menu_time || "19:00";
-      const utc = localTimeToUTCHour(menuTime, timezone);
-      const match = utc && Math.abs(nowUTCH * 60 + nowUTCM - (utc.h * 60 + utc.m)) <= 35;
-      if (match) {
-        // Leggi il piano attivo dell'utente da app_data
-        let planData = null;
-        const { data: appData } = await admin.from("app_data")
-          .select("payload").eq("user_id", sub.user_id).maybeSingle();
-        if (appData?.payload?.plans?.length) {
-          const today = new Date().toISOString().slice(0, 10);
-          const plans = appData.payload.plans;
-          planData = plans.filter(p => p.validFrom <= today)
-            .sort((a, b) => b.validFrom.localeCompare(a.validFrom))[0] || null;
-        }
-        const menuText = await generateMenuText(planData);
-        payload = JSON.stringify({
-          title: "🍽️ Proposta menù per domani",
-          body: menuText || "Apri NutriCoach per generare il menù di domani su misura.",
-          icon: "/icon-192.png", badge: "/icon-192.png",
-          tag: "menu-proposal", data: { url: "/?tab=piano" },
-        });
+    const parts = []; // parti del messaggio consolidato
+
+    // ---- 1. Promemoria pasti (se < 4 pasti registrati oggi) ----
+    if (prefs.meal_reminder !== false) {
+      const mealsCount = countMealsToday(userPayload);
+      if (mealsCount < 4) {
+        parts.push(`📝 Pasti registrati oggi: ${mealsCount}/5. Completa il diario!`);
       }
     }
 
-    if (!payload) { skipped++; continue; }
-    const ok = await safeSend(pushSub, payload, admin, sub.id);
+    // ---- 2. Pesata (se nessun peso negli ultimi 4 giorni) ----
+    if (prefs.weigh_reminder !== false) {
+      const hasWeight = hasRecentWeight(userPayload);
+      if (!hasWeight) {
+        parts.push("⚖️ Nessuna pesata negli ultimi 4 giorni. Registra il peso domani mattina.");
+      }
+    }
+
+    // ---- 3. Proposta menù ----
+    if (prefs.menu_reminder !== false) {
+      const plan = getActivePlan(userPayload);
+      const menuText = await generateMenuText(plan);
+      parts.push(`🍽️ Domani: ${menuText}`);
+    }
+
+    // Niente da inviare? Salta.
+    if (!parts.length) { skipped++; continue; }
+
+    // Costruisce il messaggio unico
+    const title = parts.length === 1 && parts[0].startsWith("🍽️")
+      ? "🍽️ NutriCoach — Menù di domani"
+      : "📊 NutriCoach — Riepilogo serale";
+    const body = parts.join("\n");
+
+    const pushPayload = JSON.stringify({
+      title,
+      body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: "daily-summary",
+      data: { url: "/" },
+    });
+
+    const ok = await safeSend(sub.subscription, pushPayload, admin, sub.id);
     ok ? sent++ : skipped++;
   }
 
-  return res.status(200).json({ slot, sent, skipped, at: now.toISOString() });
+  return res.status(200).json({ sent, skipped, at: nowUTC.toISOString() });
 }
