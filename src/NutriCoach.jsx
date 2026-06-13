@@ -1445,7 +1445,6 @@ function NotificationSettings({authUser}){
   const [subscribed,setSubscribed]=useState(false);
   const [prefs,setPrefs]=useState({
     notifications_enabled:true,
-    notify_time:"20:00", // UTC — corrisponde a 22:00 ora italiana (estate, UTC+2)
     meal_reminder:true,
     weigh_reminder:true,
     menu_reminder:true,
@@ -1510,36 +1509,13 @@ function NotificationSettings({authUser}){
 
       {!subscribed&&perm!=="denied"&&(
         <p style={{margin:0,fontSize:11,color:"var(--text-dim)",lineHeight:1.6}}>
-          Ricevi ogni sera un unico riepilogo con: pasti non registrati, promemoria pesata (se mancante da 4 giorni) e proposta menù per domani. L'app deve essere installata sulla schermata Home (iPhone).
+          Ricevi ogni sera alle 22:30 un unico riepilogo con: pasti non registrati, promemoria pesata (se mancante da 4 giorni) e proposta menù per domani. L'app deve essere installata sulla schermata Home (iPhone).
         </p>
       )}
 
       {subscribed&&(<>
-        {/* Orario notifica */}
-        <div style={{background:"var(--bg)",borderRadius:10,padding:12,marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div>
-              <div style={{fontSize:13,fontWeight:600,color:"var(--text)"}}>🕐 Orario riepilogo serale</div>
-              <div style={{fontSize:10,color:"var(--text-dim)",marginTop:2}}>Tutte le notifiche in un unico messaggio</div>
-            </div>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <input type="time"
-              value={(()=>{
-                // mostra l'ora italiana (UTC+2 estate) all'utente
-                const [h,m]=(prefs.notify_time||"20:00").split(":").map(Number);
-                const localH=(h+2)%24;
-                return `${String(localH).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-              })()}
-              onChange={e=>{
-                // converte ora italiana → UTC prima di salvare
-                const [h,m]=e.target.value.split(":").map(Number);
-                const utcH=(h-2+24)%24;
-                setPrefs(p=>({...p,notify_time:`${String(utcH).padStart(2,"0")}:${String(m).padStart(2,"0")}`}));
-              }}
-              style={{...inp2,colorScheme:"dark",width:110}}/>
-            <span style={{fontSize:11,color:"var(--text-dim)"}}>ora italiana · default 22:00</span>
-          </div>
+        <div style={{background:"var(--bg)",borderRadius:10,padding:"10px 12px",marginBottom:12,fontSize:11,color:"var(--text-dim)"}}>
+          🕐 Riepilogo inviato ogni sera alle <strong style={{color:"var(--text)"}}>22:30</strong>
         </div>
 
         {/* Tipi di notifica */}

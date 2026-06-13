@@ -100,7 +100,6 @@ export default async function handler(req, res) {
 
   const admin = makeAdmin();
   const nowUTC = new Date();
-  const nowUTCMinutes = nowUTC.getUTCHours() * 60 + nowUTC.getUTCMinutes();
 
   const { data: subs, error } = await admin.from("push_subscriptions").select("*");
   if (error) return res.status(500).json({ error: error.message });
@@ -112,12 +111,6 @@ export default async function handler(req, res) {
 
     // Notifiche globalmente disattivate
     if (prefs.notifications_enabled === false) { skipped++; continue; }
-
-    // Controlla se siamo nell'orario di notifica dell'utente (±30 min in UTC)
-    const notifyTime = prefs.notify_time || "20:00";
-    const [nh, nm] = notifyTime.split(":").map(Number);
-    const targetMinutes = nh * 60 + nm;
-    if (Math.abs(nowUTCMinutes - targetMinutes) > 30) { skipped++; continue; }
 
     // Leggi i dati dell'utente da app_data per la logica intelligente
     let userPayload = null;
