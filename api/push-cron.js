@@ -6,7 +6,7 @@
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "gemini-2.0-flash";
 
 function makeAdmin() {
   return createClient(

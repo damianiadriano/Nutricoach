@@ -5,7 +5,7 @@
 //  L'immagine NON viene salvata: usata al volo e scartata.
 // ============================================================
 
-const MODEL = "gemini-2.5-flash-lite"; // economico + multimodale + free tier
+const MODEL = "gemini-2.0-flash"; // stable GA model
 
 const SYSTEM = `Sei un nutrizionista che stima i valori nutrizionali di un piatto.
 Ricevi una descrizione testuale OPPURE una foto di un piatto.
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
 
     if (!r.ok) {
       const errText = await r.text();
-      // 429 = rate limit free tier
+      console.error("[estimate] Gemini error", r.status, errText.slice(0, 500));
       if (r.status === 429) return res.status(429).json({ error: "Limite richieste raggiunto (free tier). Riprova tra poco." });
       return res.status(502).json({ error: "Errore dal servizio di stima.", detail: errText.slice(0, 300) });
     }
