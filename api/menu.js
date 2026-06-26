@@ -4,7 +4,7 @@
 //  Stesso provider/chiave della stima piatti (GEMINI_API_KEY).
 // ============================================================
 
-const MODEL = "gemini-2.5-flash-lite";
+const MODEL = "gemini-2.0-flash"; // stable GA model
 
 function buildSystem(p) {
   return `Sei un nutrizionista che crea menù giornalieri pratici e bilanciati in italiano.
@@ -44,8 +44,9 @@ export default async function handler(req, res) {
 
     const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     if (!r.ok) {
-      if (r.status === 429) return res.status(429).json({ error: "Limite richieste raggiunto (free tier). Riprova tra poco." });
       const t = await r.text();
+      console.error("[menu] Gemini error", r.status, t.slice(0, 500));
+      if (r.status === 429) return res.status(429).json({ error: "Limite richieste raggiunto (free tier). Riprova tra poco." });
       return res.status(502).json({ error: "Errore dal servizio menù.", detail: t.slice(0, 300) });
     }
     const data = await r.json();
