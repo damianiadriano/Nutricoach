@@ -42,7 +42,17 @@ export default async function handler(req, res) {
       generationConfig: { temperature: 0.9, maxOutputTokens: 1600, responseMimeType: "application/json" },
     };
 
-    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
+    let r;
+    try {
+      r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: ctrl.signal });
+    } catch (fetchErr) {
+      clearTimeout(timer);
+      if (fetchErr.name === "AbortError") return res.status(504).json({ error: "Servizio menù lento, riprova tra qualche secondo." });
+      throw fetchErr;
+    }
+    clearTimeout(timer);
     if (!r.ok) {
       const t = await r.text();
       console.error("[menu] Gemini error", r.status, t.slice(0, 500));
