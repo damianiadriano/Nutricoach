@@ -140,18 +140,23 @@ const fmtShort=k=>{const d=new Date(k+"T12:00:00");return `${d.getDate()}/${d.ge
 
 // ---- Open Food Facts: ricerca prodotti commerciali (gira nel browser dell'utente) ----
 async function searchOFF(query){
-  const url=`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=12&fields=product_name,brands,nutriments,serving_size,serving_quantity,image_small_url`;
-  const res=await fetch(url,{headers:{"User-Agent":"NutriCoach - personal"}});
-  const data=await res.json();
-  return (data.products||[]).map(p=>{
-    const n=p.nutriments||{};
-    const kcal100=n["energy-kcal_100g"]??(n["energy_100g"]?n["energy_100g"]/4.184:null);
-    if(kcal100==null)return null;
-    return {name:[p.product_name,p.brands].filter(Boolean).join(" · ").slice(0,60)||"Prodotto senza nome",
-      img:p.image_small_url||null,kcal100:Math.round(kcal100),
-      p100:+(n["proteins_100g"]??0).toFixed(1),c100:+(n["carbohydrates_100g"]??0).toFixed(1),f100:+(n["fat_100g"]??0).toFixed(1),
-      serving:p.serving_quantity?Math.round(p.serving_quantity):null,servingTxt:p.serving_size||null};
-  }).filter(Boolean);
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),10000);
+  try{
+    const url=`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=12&fields=product_name,brands,nutriments,serving_size,serving_quantity,image_small_url`;
+    const res=await fetch(url,{signal:ctrl.signal});
+    if(!res.ok)throw new Error(`OFF HTTP ${res.status}`);
+    const data=await res.json();
+    return (data.products||[]).map(p=>{
+      const n=p.nutriments||{};
+      const kcal100=n["energy-kcal_100g"]??(n["energy_100g"]?n["energy_100g"]/4.184:null);
+      if(kcal100==null)return null;
+      return {name:[p.product_name,p.brands].filter(Boolean).join(" · ").slice(0,60)||"Prodotto senza nome",
+        img:p.image_small_url||null,kcal100:Math.round(kcal100),
+        p100:+(n["proteins_100g"]??0).toFixed(1),c100:+(n["carbohydrates_100g"]??0).toFixed(1),f100:+(n["fat_100g"]??0).toFixed(1),
+        serving:p.serving_quantity?Math.round(p.serving_quantity):null,servingTxt:p.serving_size||null};
+    }).filter(Boolean);
+  }finally{clearTimeout(timer);}
 }
 
 /* ============ MOTORE PIANO ============ */
